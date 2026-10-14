@@ -85,32 +85,40 @@ added to the annotation queue.
 5. The next eval pass runs it (`python -m producery.evals.run crew_e2e [--rows <row>]`), the gate remembers it.
 
 
-## 6. Results, 2026-10-13 (the recorded run)
+## 6. Results, 2026-10-14 (the recorded run)
 
-The four datasets through the interim Claude CLI bridge on the compose stack built from commit `a0ed473`
-(prompt pins `analyst:24c9291d`, `classifier:bb7d511f`, `drafter:be8d0e30`, `extractor:76391e1c`,
-`judge_draft:08ec7154`); experiments in LangSmith project `producery`, gate report in
-`evals/results/gate_report-2026-10-13.md`.
+The four gate datasets and the 29-row suite through the interim Claude CLI bridge on the compose stack built from
+commit `022e651` (harness at `12574c3`, which differs from the images only by the gate's baseline merge
+and its tests); prompt pins `analyst:eccdae2a`, `classifier:bb7d511f`, `drafter:be8d0e30`,
+`extractor:76391e1c`, `judge_draft:08ec7154`. Experiments in LangSmith project `producery`;
+the gate report, the suite's rows and summary and the online summary are copied under `evals/results/` with this
+date, and `evals/baseline.json` is written from this run, so G4 and G9 compare the next run against it.
 
-| Dataset | Experiment | Rows clean | p95 latency (as gate G7 computes it; on these row counts the slowest row) | Mean cost per row | Gate |
+| Dataset | Experiment | Rows clean | p95 latency (gate G7 formula) | Mean cost per row | Gate |
 |---|---|---|---|---|---|
-| classifier | `run-a0ed473-classifier-1f643274` | 7/7 | 61 s | 0.10 USD | GREEN |
-| crew_e2e | `run-a0ed473-crew_e2e-2e6aa9ad` | 14/14 | 146 s | 0.30 USD | GREEN |
-| extractor | `run-a0ed473-extractor-7d830411` | 4/4 | 17 s | 0.08 USD | GREEN |
-| tools | `run-a0ed473-tools-ae22e251` | 10/10 | 2.8 s | none (no model call) | GREEN |
+| classifier | `run-classifier-14b4a490` | 7/7 | 111 s | 0.11 USD | GREEN |
+| crew_e2e | `run-crew_e2e-9148cb8d` | 14/14 | 148 s | 0.30 USD | GREEN |
+| extractor | `run-extractor-869ffeed` | 4/4 | 21 s | 0.08 USD | GREEN |
+| tools | `run-tools-3991605a` | 10/10 | 3 s | none (no model call) | GREEN |
+| suite | `suite-12574c3-8f6a537a` | 29/29 | 153 s | 0.33 USD | GREEN |
 
-Gate verdict `GREEN` on G1 to G9, zero evaluator errors; the judge scored 3 of 3 on both judged rows
-(`crew-001`, `crew-008`). Representative traces: `crew-001` (a drafting turn with `task` → `sql_query`, 118 s,
-148,018 tokens, 0.51 USD) `b9139171-3bc5-4599-b244-b7fe0e900eee`; `crew-010` (cross-policy arithmetic,
-`sql_query` before `run_code`) `83601ec0-eb47-44f1-9678-0dc25179fd6b`; `crew-005` (red team, personal mail with
-an embedded instruction, no model call, 8 s) `a94efebd-2431-4845-96e7-527597d4e5c3`; `golden-2982aaee` (the W-9
-decoy, only approved sources cited) `fa55fc65-8149-4242-b9e4-12bb95f25998`.
+Gate verdict `GREEN` on G1 to G9 over all five result files, 0 evaluator errors. Harness judge on the
+crew rows: 3, 3 (0 to 3). Suite judges: not run this time (`--no-judges`: the deterministic checks only, by decision; the judge rows are ready to run). Representative traces:
+`crew-001` (a drafting turn with `task` → `sql_query`, 95 s, 148,392 tokens,
+0.50 USD) `6e50b53e-b9c5-4274-ad5c-8f23ef04fed2`; `crew-010` (cross-policy arithmetic, `sql_query`
+before `run_code`) `f963497e-20a2-48ba-a64a-da2159178981`; `crew-005` (red team, personal mail with an
+embedded instruction, no model call) `49dd81d8-3cbd-40e6-9005-b042a1ec20fc`; `golden-2982aaee` (the W-9
+decoy, only approved sources cited) `62a15b0e-dbe4-42af-a312-d207dfe37cc3`.
+
+Online scoring over the last 24 h of production traces (`evals/results/online-2026-10-14.json`): grounding
+1.00 (n 5), compliance_clean 1.00
+(n 13), tool_failure_free 1.00 (n 17),
+latency_ok 0.94 (n 17).
 
 Two rules this run depends on: the analyst prompt states that a tax or identity form is never a source for policy
 facts (`golden-2982aaee` carries a W-9 decoy), and `crew-002`'s trajectory cap is 12 tool calls, within what the
-agent configuration allows (8 per delegation). `evals/baseline.json` is written from this run, so G4 and G9
-compare the next run against it.
+agent configuration allows (8 per delegation). On the bridge every tier is one CLI model, so the judge scores
+above are same-family (§1).
 
 Costs are list-price estimates from the agent's token usage and an upper bound on the bridge, whose own prompt
-rides along on every call; latencies likewise. The suite in `evals/` (29 rows, three judges) is run separately
-with `python -m evals.evaluators.run_suite`; its results live in `.eval-results/suite.json`.
+rides along on every call; latencies likewise.

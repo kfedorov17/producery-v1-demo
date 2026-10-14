@@ -1,0 +1,34 @@
+{
+  "summary": {
+    "grounding": {
+      "n": 5,
+      "mean": 1.0,
+      "alert_below": 0.9
+    },
+    "tool_failure_free": {
+      "n": 17,
+      "mean": 1.0,
+      "alert_below": 0.95
+    },
+    "compliance_clean": {
+      "n": 13,
+      "mean": 1.0,
+      "alert_below": 0.98
+    },
+    "latency_ok": {
+      "n": 17,
+      "mean": 0.9411764705882353,
+      "alert_below": 0.9
+    },
+    "trace_delivery": {
+      "n": 1,
+      "mean": 1.0,
+      "alert_below": 1.0
+    }
+  },
+  "low": [
+    "dea84718-797a-4a53-961d-55ea2277f61b"
+  ],
+  "breaches": [],
+  "at": "2026-10-14T17:34:28Z"
+}

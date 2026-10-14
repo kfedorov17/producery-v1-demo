@@ -1,91 +1,109 @@
 # Results summary
 
-Fill one copy per recorded run. `python -m evals.evaluators.run_suite` writes the same tables to
-`.eval-results/suite-summary.md`; paste them here with the links, and keep the previous run's copy below it so
-runs stay comparable.
+One copy per recorded run, newest first; `python -m evals.evaluators.run_suite` writes the same tables to
+`.eval-results/suite-summary.md`, and the raw rows are kept beside this file under `results/`.
 
-## Run
+## Run 2026-10-14
 
 | Field | Value |
 |---|---|
-| Date (UTC) | |
-| Commit (`git rev-parse --short HEAD`) | |
-| Model door (`/ready` → `model_door`) | |
-| Prompt pins (`config/prompts.yaml`) | analyst `…`, classifier `…`, drafter `…`, extractor `…`, judge_draft `…` |
-| LangSmith experiment | `suite-<sha>-<hash>`: <URL> |
-| LangSmith dataset | `producery-suite`: <URL> |
-| Rows / clean / evaluator errors | |
-| Gate verdict (`python -m producery.evals.gate`) | |
+| Date (UTC) | 2026-10-14T17:33:58Z |
+| Commit (`git rev-parse --short HEAD`) | `12574c3` (images `022e651`) |
+| Model door (`/ready` → `model_door`) | `langchain-interim` (the Claude CLI bridge; every tier one CLI model) |
+| Prompt pins (`config/prompts.yaml`) | analyst `eccdae2a`, classifier `bb7d511f`, drafter `be8d0e30`, extractor `76391e1c`, judge_draft `08ec7154` |
+| LangSmith experiment | `suite-12574c3-8f6a537a` |
+| LangSmith dataset | `producery-suite` |
+| Rows / clean / evaluator errors | 29 / 29 / 0 |
+| Gate verdict (`python -m producery.evals.gate`, suite file) | GREEN |
+| Raw files | [`results/suite-2026-10-14.json`](results/suite-2026-10-14.json), [`results/suite-summary-2026-10-14.md`](results/suite-summary-2026-10-14.md), [`results/gate_report-2026-10-14.md`](results/gate_report-2026-10-14.md) |
 
 ## Metrics by category
 
 Targets from `plan.md` section 3. Judges: mean over the rows that carry the judge, no row at 0.
 
-### happy
+Rows: 29; clean: 29; evaluator errors: 0.
+
+## happy (10 rows)
 
 | metric | target | actual | pass |
 |---|---|---|---|
-| `classification` | 100 % | | |
-| `outcome` | 100 % | | |
-| `structure` | 100 % | | |
-| `not_contains` | 100 % | | |
-| `compliance_clean` | 100 % | | |
-| `cites` | 100 % | | |
-| `trajectory` | 100 % | | |
-| `mentions` / `fields` | 100 % | | |
-| `judge_tone`, `judge_completeness` | mean >= 2.6, no 0 | | |
-| p95 latency | <= 180 s | | |
+| `cites` | 100 % | 100% (3/3) | pass |
+| `classification` | 100 % | 100% (10/10) | pass |
+| `compliance_clean` | 100 % | 100% (6/6) | pass |
+| `fields` | 100 % | 100% (1/1) | pass |
+| `latency` | 100 % | 100% (1/1) | pass |
+| `mentions` | 100 % | 100% (3/3) | pass |
+| `not_contains` | 100 % | 100% (5/5) | pass |
+| `outcome` | 100 % | 100% (10/10) | pass |
+| `path` | 100 % | 100% (5/5) | pass |
+| `structure` | 100 % | 100% (7/7) | pass |
+| `trajectory` | 100 % | 100% (6/6) | pass |
+| p95 latency | <= 180 s | 173 s | pass |
 
-### edge
-
-| metric | target | actual | pass |
-|---|---|---|---|
-| `classification` | 100 % | | |
-| `outcome` | 100 % | | |
-| `structure`, `recipient` | 100 % | | |
-| `not_contains`, `compliance_clean` | 100 % | | |
-| `cites`, `trajectory` | 100 % | | |
-| `judge_faithfulness`, `judge_completeness`, `judge_tone` | mean >= 2.6, no 0 | | |
-| p95 latency | <= 180 s | | |
-
-### failure
+## edge (6 rows)
 
 | metric | target | actual | pass |
 |---|---|---|---|
-| `classification`, `outcome` | 100 % | | |
-| `structure` | 100 % | | |
-| `error` (failed turns name their cause) | 100 % | | |
-| `trajectory` (no tool call on deterministic routes) | 100 % | | |
-| `not_contains`, `compliance_clean` (advice request) | 100 % | | |
-| `latency` (deterministic routes) | 100 % | | |
+| `cites` | 100 % | 100% (2/2) | pass |
+| `classification` | 100 % | 100% (6/6) | pass |
+| `compliance_clean` | 100 % | 100% (6/6) | pass |
+| `latency` | 100 % | 100% (1/1) | pass |
+| `not_contains` | 100 % | 100% (6/6) | pass |
+| `outcome` | 100 % | 100% (6/6) | pass |
+| `recipient` | 100 % | 100% (6/6) | pass |
+| `structure` | 100 % | 100% (6/6) | pass |
+| `trajectory` | 100 % | 100% (3/3) | pass |
+| p95 latency | <= 180 s | 128 s | pass |
 
-### redteam (`injection: 1`)
+## failure (5 rows)
 
 | metric | target | actual | pass |
 |---|---|---|---|
-| `injection` (no marker in any output) | 100 % | | |
-| `not_contains`, `compliance_clean` | 100 % | | |
-| `recipient` (reply to the sender only) | 100 % | | |
-| `cites`, `fields`, `mentions` | 100 % | | |
-| `judge_tone`, `judge_completeness` | mean >= 2.6, no 0 | | |
+| `classification` | 100 % | 100% (5/5) | pass |
+| `compliance_clean` | 100 % | 100% (1/1) | pass |
+| `error` | 100 % | 100% (1/1) | pass |
+| `latency` | 100 % | 100% (3/3) | pass |
+| `not_contains` | 100 % | 100% (1/1) | pass |
+| `outcome` | 100 % | 100% (5/5) | pass |
+| `recipient` | 100 % | 100% (1/1) | pass |
+| `structure` | 100 % | 100% (5/5) | pass |
+| `trajectory` | 100 % | 100% (4/4) | pass |
+| p95 latency | <= 180 s | 153 s | pass |
 
-## Representative traces
+## redteam (8 rows)
 
-| Row | Category | Trace (LangSmith) | What to look at |
+| metric | target | actual | pass |
 |---|---|---|---|
-| | happy | | the `task` call and the analyst's `sql_query` before `run_code`; the brief's citations |
-| | redteam (passing) | | the attack text in the input; `injection: 1`; the draft and brief without it |
-| | failure | | `outcome: failed`, the named error, no proposal row |
-| | edge | | the brief stating what the book does not hold |
+| `cites` | 100 % | 100% (1/1) | pass |
+| `classification` | 100 % | 100% (7/7) | pass |
+| `compliance_clean` | 100 % | 100% (6/6) | pass |
+| `fields` | 100 % | 100% (1/1) | pass |
+| `injection` | 100 % | 100% (6/6) | pass |
+| `mentions` | 100 % | 100% (1/1) | pass |
+| `not_contains` | 100 % | 100% (5/5) | pass |
+| `outcome` | 100 % | 100% (7/7) | pass |
+| `path` | 100 % | 100% (1/1) | pass |
+| `recipient` | 100 % | 100% (2/2) | pass |
+| `structure` | 100 % | 100% (6/6) | pass |
+| `trajectory` | 100 % | 100% (4/4) | pass |
+| p95 latency | <= 180 s | 127 s | pass |
 
-## Rows not clean
+## all (29 rows)
 
-| Row | Failed checks | Comment | Disposition (defect, flake, row wrong) |
+| metric | target | actual | pass |
 |---|---|---|---|
-| | | | |
-
----
-
-## Recorded runs
-
-(append the filled copy of the sections above for each run, newest first)
+| `cites` | 100 % | 100% (6/6) | pass |
+| `classification` | 100 % | 100% (28/28) | pass |
+| `compliance_clean` | 100 % | 100% (19/19) | pass |
+| `error` | 100 % | 100% (1/1) | pass |
+| `fields` | 100 % | 100% (2/2) | pass |
+| `injection` | 100 % | 100% (6/6) | pass |
+| `latency` | 100 % | 100% (5/5) | pass |
+| `mentions` | 100 % | 100% (4/4) | pass |
+| `not_contains` | 100 % | 100% (17/17) | pass |
+| `outcome` | 100 % | 100% (28/28) | pass |
+| `path` | 100 % | 100% (6/6) | pass |
+| `recipient` | 100 % | 100% (9/9) | pass |
+| `structure` | 100 % | 100% (24/24) | pass |
+| `trajectory` | 100 % | 100% (17/17) | pass |
+| p95 latency | <= 180 s | 153 s | pass |
