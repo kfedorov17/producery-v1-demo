@@ -87,12 +87,12 @@ def test_baseline_keeps_datasets_a_partial_run_did_not_decide(tmp_path, monkeypa
     assert written["crew_e2e"]["rows"] == 1
 
 
-def test_baseline_is_refused_when_nothing_was_decided(tmp_path, monkeypatch):
+def test_baseline_is_left_alone_when_nothing_was_decided(tmp_path, monkeypatch):
     (tmp_path / "tools.json").write_text(
         json.dumps({"dataset": "tools", "partial": True, "rows": [_row("t", {"tool_result": 1})]}),
         encoding="utf-8",
     )
     monkeypatch.setattr("sys.argv", ["gate", "--results", str(tmp_path), "--write-baseline"])
     monkeypatch.setattr(gate, "BASELINE", tmp_path / "baseline.json")
-    assert gate.main() == 1
+    assert gate.main() == 0  # a GREEN smoke run with nothing to refresh is not a failure
     assert not (tmp_path / "baseline.json").exists()

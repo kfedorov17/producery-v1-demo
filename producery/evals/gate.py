@@ -215,9 +215,9 @@ def main() -> int:
         if all_failures:
             print("refusing to write a RED baseline")
             return 1
-        if not decided:
-            print("refusing to write a baseline: no full dataset was decided (partial runs are skipped)")
-            return 1
+        if not decided:  # only partial (smoke / --rows) files here, e.g. the post stage after a CD smoke run
+            print("baseline unchanged: no full dataset was decided (partial runs are skipped)")
+            return 0
         new_baseline = {"datasets": {**(baseline.get("datasets") or {}), **decided}}
         BASELINE.write_text(json.dumps(new_baseline, indent=2) + "\n", encoding="utf-8")
         print(f"baseline written: {BASELINE} ({', '.join(decided)} refreshed)")
