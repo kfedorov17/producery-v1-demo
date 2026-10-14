@@ -1,0 +1,29 @@
+# Local environments and secrets
+.env
+.venv/
+# Tool caches and build outputs
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+.fastembed_cache/
+.langgraph_api/
+# Runtime artifacts produced on this machine (a recorded gate report is copied to evals/results/ on purpose)
+.eval-results/
+pipeline/.deploy/
+bridge.log
+docs/.tmp/
+# Not part of the solution
+*.pdf
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+# Coverage
+.coverage
+htmlcov/

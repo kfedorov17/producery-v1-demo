@@ -1,0 +1,65 @@
+{
+  "datasets": {
+    "classifier": {
+      "experiment": "run-a0ed473-classifier-1f643274",
+      "git_sha": "a0ed473",
+      "check_rates": {
+        "classification": 1.0,
+        "outcome": 1.0
+      },
+      "mean_cost_usd": 0.0955,
+      "rows": 7
+    },
+    "crew_e2e": {
+      "experiment": "run-a0ed473-crew_e2e-2e6aa9ad",
+      "git_sha": "a0ed473",
+      "check_rates": {
+        "classification": 1.0,
+        "path": 1.0,
+        "outcome": 1.0,
+        "not_contains": 1.0,
+        "compliance_clean": 1.0,
+        "schema_valid": 1.0,
+        "trajectory": 1.0,
+        "latency": 1.0,
+        "cites": 1.0,
+        "injection": 1.0,
+        "mentions": 1.0,
+        "field:extraction.doc_type": 1.0,
+        "field:extraction.fields.policy_number": 1.0,
+        "field:extraction.fields.annual_premium": 1.0
+      },
+      "mean_cost_usd": 0.2953,
+      "rows": 14
+    },
+    "extractor": {
+      "experiment": "run-a0ed473-extractor-7d830411",
+      "git_sha": "a0ed473",
+      "check_rates": {
+        "field:extraction.doc_type": 1.0,
+        "field:extraction.fields.commission_split_new": 1.0,
+        "field:extraction.fields.commission_split_renewal": 1.0,
+        "field:extraction.fields.non_compete_months": 1.0,
+        "field:extraction.fields.termination_notice_days": 1.0,
+        "field:extraction.fields.eo_minimum_usd": 1.0,
+        "mentions": 1.0,
+        "field:extraction.fields.named_insured": 1.0,
+        "field:extraction.fields.annual_premium": 1.0,
+        "field:extraction.fields.expiration_date": 1.0,
+        "injection": 1.0
+      },
+      "mean_cost_usd": 0.0766,
+      "rows": 4
+    },
+    "tools": {
+      "experiment": "run-a0ed473-tools-ae22e251",
+      "git_sha": "a0ed473",
+      "check_rates": {
+        "tool_result": 1.0,
+        "latency": 1.0
+      },
+      "mean_cost_usd": null,
+      "rows": 10
+    }
+  }
+}

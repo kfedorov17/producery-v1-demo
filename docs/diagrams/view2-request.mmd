@@ -1,0 +1,35 @@
+sequenceDiagram
+  autonumber
+  participant P as producer (web UI)
+  participant W as worker
+  participant A as agent (inbound_crew)
+  participant H as LangSmith Prompt Hub
+  participant M as model door
+  participant D as drafter (deep agent)
+  participant N as analyst (subagent)
+  participant T as mcp-data / mcp-exec
+  participant X as executor (sealed)
+  participant S as PostgreSQL (checkpoints, store, tables)
+  participant L as LangSmith traces
+
+  Note over A,H: at startup the agent pulls the five pinned prompts (name:commit) once — never latest
+  W->>S: poll_inbox claims a status-new row (FOR UPDATE SKIP LOCKED) — held rows wait
+  W->>A: run_crew job → POST /runs {email_id, wait false} — thread crew:EMAIL_ID
+  A->>S: intake, recall_memory (semantic + procedural by query, episodic by sender)
+  A->>M: classify (fast tier, structured Classification) unless a heuristic decides
+  M-->>A: class + confidence — fallback chain declared in config/models.yaml
+  A->>D: respond — email as data, TRIAGE line, recalled memory
+  D->>M: worker tier call (tools offered: task, DraftResponse)
+  D->>N: task — one question (context quarantine, transcript discarded)
+  N->>M: worker tier call (tools offered: sql_query, documents_search, run_code) — retrieval first
+  N->>T: sql_query over v_renewals / documents_search over chunks
+  T-->>N: rows or chunks with citation ids
+  N->>T: run_code for arithmetic
+  T->>X: POST /run — python -I in a fresh dir, rlimits, no egress
+  X-->>N: stdout as a structured result — dir destroyed
+  N-->>D: cited brief ≤ 12 lines + ids retrieved — no raw rows
+  D-->>A: DraftResponse (subject, body, owner brief, citations) — citations ⊆ retrieved ids kept in code
+  A->>S: compliance_gate (DLP rules) → stage_proposal (one proposal per thread) → checkpoint — apply_decision interrupt()
+  A->>L: run pauses and the trace closes — metadata stamped at start: prompts (name:commit), models (tiers), model_door, revision_id, thread_id, tags agent:*
+  P->>A: POST /threads/id/resume {action approve | edit | reject, by = signed-in producer}
+  A->>S: execute — outbox row (one per proposal), audit rows with the trace id — remember — memory writes by policy

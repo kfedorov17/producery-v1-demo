@@ -1,0 +1,21 @@
+# Deterministic DLP / refusal gate applied to every client-facing draft (code, not model).
+# Flags inform the human reviewer and the evals; they never silently rewrite content.
+rules:
+  - code: premium_in_client_text
+    pattern: '(?:\$|\bUSD\s?)\s?\d[\d,]*(?:\.\d{1,2})?[kK]?|\b\d[\d,]*(?:\.\d+)?\s?(?:dollars|bucks)\b|\b\d+(?:\.\d+)?\s?%\s?(?:premium\s+)?(?:increase|higher|rise|up\b(?!\s+to))'
+    why: dollar amount or rate movement in client-facing text
+  - code: binding_language
+    pattern: "\\b(?:you'?re|you are) (?:all set|covered)(?! by our)|policy is bound|coverage is in (?:force|place)"
+    why: binding language — coverage exists only when the producer says so
+  - code: coverage_advice
+    pattern: "\\b(?:i|we)(?:'d| would)? (?:recommend|suggest|advise)\\b|\\byou should (?:raise|lower|add|drop|buy|increase|decrease)\\b"
+    why: coverage advice in client-facing text
+  - code: guarantees
+    pattern: '\bguarantee[sd]? (?:the )?(?:savings|rate|lowest|best)|lowest (?:rate|price)|best price'
+    why: guarantee language
+  - code: sensitive_data
+    pattern: '\b\d{3}-\d{2}-\d{4}\b|\bssn\b|card number|routing number'
+    why: sensitive data in a message body
+  - code: rate_prediction
+    pattern: "\\b(?:premium|rate) (?:will|should|is going to|would) (?:be|go|come)|should come in around"
+    why: rate prediction in client-facing text

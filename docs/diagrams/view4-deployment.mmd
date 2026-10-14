@@ -1,0 +1,48 @@
+flowchart LR
+  classDef agent fill:#dbe9ff,stroke:#2f6fdb,color:#0b2a5b
+  classDef tool fill:#dcf5e3,stroke:#2e8b57,color:#0f3d22
+  classDef store fill:#ffe9cc,stroke:#d98b1a,color:#4d2e00
+  classDef ls fill:#ece0ff,stroke:#7a3fd1,color:#2d0f5c
+  classDef ext fill:#eeeeee,stroke:#777,color:#222
+  classDef boundary fill:none,stroke:#c0392b,stroke-dasharray:6 4
+
+  subgraph compose ["docker-compose.yml — network default (images from BASE_REGISTRY, default the ECR Public mirror)"]
+    postgres[("postgres — pgvector/pgvector:pg16 — 5432 → host 5444")]:::store
+    redis[("redis — redis:7-alpine — no host port")]:::store
+    seed["seed — one-shot: schema, book, fixtures; queues ingestion"]:::tool
+    mcpdata["mcp-data — 8081 → host 8091"]:::tool
+    mcpexec["mcp-exec — 8082 → host 8092 — on default + exec_net"]:::tool
+    subgraph execnet ["exec_net — internal: true"]
+      executor["executor — 9000, no host port — read_only, cap_drop ALL, tmpfs /work"]:::tool
+    end
+    agent["agent — 8000 → host 8010"]:::agent
+    worker["worker — 8090 → host 8090"]:::agent
+    web["web — 3000 → host 3010 — holds the agent token server-side only; roster mounted, not baked"]:::agent
+  end
+  bridge["host: bridge/claude_cli_bridge.py — 8099 — interim model door (option 3)"]:::ext
+  langsmith["LangSmith SaaS — traces, Hub, datasets, feedback, annotation queue"]:::ls
+
+  seed -->|"depends_on healthy"| postgres
+  seed -->|"ingest jobs"| redis
+  mcpdata -->|"after seed"| postgres
+  agent -->|"after seed, mcp-data, mcp-exec healthy"| mcpdata
+  agent -->|"MCP"| mcpexec
+  agent -->|"checkpointer, store, tables"| postgres
+  worker -->|"after agent healthy"| agent
+  worker -->|"queue"| redis
+  web -->|"after agent healthy — AGENT_URL http://agent:8000"| agent
+  mcpexec -->|"HTTP 9000"| executor
+  agent -.->|"host.docker.internal:8099"| bridge
+  agent -.->|"traces, Hub pulls"| langsmith
+  worker -.->|"traces"| langsmith
+
+  subgraph target ["Kubernetes / LangSmith Deployment target — deployment.md §5"]
+    k_agent["agent → Agent Server from langgraph.json (entrypoint.py:graph, compiled at import); platform-injected checkpointer + store"]:::agent
+    k_worker["worker → Deployment on the Redis queue, or Agent Server crons"]:::agent
+    k_web["web → Deployment + Ingress; same /api/ui proxy"]:::agent
+    k_tools["mcp-data, mcp-exec → ClusterIP Services"]:::tool
+    k_sandbox["executor → LangSmith Sandboxes, same run_code contract"]:::tool
+    k_stores["postgres, redis → managed PostgreSQL + pgvector, managed Redis"]:::store
+    k_door["bridge → LangSmith LLM Gateway, fallback chains in Gateway config"]:::ls
+  end
+  class execnet boundary

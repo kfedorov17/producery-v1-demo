@@ -1,0 +1,35 @@
+# Online evaluation + alerting (items 10, 12). Scores land in LangSmith as run feedback.
+#
+# Two layers:
+#  1. LangSmith online evaluators (automation rules on the tracing project) — LLM-as-judge rules are created in the
+#     UI (Tracing → project → Evaluators → + Evaluator); the SDK does not expose rule creation. The intended rules
+#     are declared here so the configuration is reviewable in the repo and reproducible by hand.
+#  2. producery.evals.online — SDK-local deterministic scoring over sampled recent traces, writing feedback through
+#     the LangSmith feedback API and routing low scorers to the annotation queue. Runs post-deploy and on demand.
+project: producery
+sample_rate: 0.5             # share of recent root runs scored per pass
+window_hours: 24
+annotation_queue: producery-review
+
+langsmith_rules:             # layer 1 — declared config for the UI
+  - name: draft-quality-judge
+    kind: llm_as_judge
+    filter: 'and(eq(name, "drafter"), eq(run_type, "chain"))'
+    sampling_rate: 0.2                 # UI rule setting; not read by the SDK-local scorer
+    prompt: producery-judge-draft      # the Hub prompt (anchored 0–3)
+    feedback_key: judge
+    note: "judge model must be a different family than the worker tier (see config/models.yaml)"
+  - name: low-score-to-annotation-queue
+    kind: action
+    filter: 'and(eq(name, "inbound_crew"), lt(feedback.judge, 2))'
+    action: add_to_annotation_queue
+    queue: producery-review
+
+sdk_metrics:                 # layer 2 — deterministic, SDK-local (not ACE)
+  grounding:        { description: "every citation id is well-formed and present in retrieved ids", alert_below: 0.9 }
+  tool_failure_free: { description: "no tool call under the trace ended in error",                   alert_below: 0.95 }
+  compliance_clean: { description: "deterministic DLP gate found zero flags on client text",        alert_below: 0.98 }
+  latency_ok:       { description: "root run latency within the crew SLO",                          alert_below: 0.9, slo_s: 180 }
+  trace_delivery:   { description: "the agent's SDK dropped no trace batch since start (/ready traces.delivered)", alert_below: 1.0 }
+alerts:                      # documentation of the alerting posture; online.py exits 2 on a breach
+  channel: stdout+exit-code  # pipeline post stage fails (exit 2) on any breach; LangSmith alert rules mirror these thresholds

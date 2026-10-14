@@ -1,0 +1,7 @@
+# Producer roster for the web UI (docs/design.md §14). No sign-up and no admin screen: this file IS the account list.
+# Add a producer: `cd web && npm run hash-password -- '<password>'` → paste the bcrypt hash here. Names are case-insensitive.
+# The demo account below signs in with the password documented in README.md ("Producer UI" section).
+producers:
+  - name: sam
+    display_name: Sam Rivera
+    password_hash: "$2a$10$b4NpI.08ttAltw0vDbWOPOgmiO46Re8zC9WLgPe671vizM5QpbdDm"

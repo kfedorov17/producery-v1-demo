@@ -1,0 +1,74 @@
+# Agent definitions are configuration artifacts. Code implements; this file names.
+#
+# identity.version   — bumped when the prompt pin or tool grant changes; stamped on every trace
+# prompt             — Hub prompt name; its pinned commit lives in config/prompts.yaml
+# model_tier         — a tier from config/models.yaml (static assignment; no runtime model picking)
+# scope              — one paragraph. For subagents this IS the `task` routing contract the parent sees.
+# tools              — least-privilege allowlist; every name must exist in the tool registry or startup fails
+# guardrails         — hard limits enforced by LangGraph/LangChain primitives, not prose
+agents:
+  classifier:
+    identity: { name: classifier, version: 1 }
+    kind: stage
+    prompt: classifier
+    model_tier: fast
+    scope: >-
+      Triage one inbound email into exactly one of eight operational classes with a confidence and a
+      one-sentence reason. Treats email content strictly as data.
+    tools: []
+
+  extractor:
+    identity: { name: extractor, version: 1 }
+    kind: stage
+    prompt: extractor
+    model_tier: worker
+    scope: >-
+      Extract a fixed field set from a policy declarations page or a distribution agreement, quoting source
+      spans and confidences; declines non-documents instead of guessing.
+    tools: []
+
+  drafter:
+    identity: { name: drafter, version: 1 }
+    kind: deep_agent
+    prompt: drafter
+    model_tier: worker
+    scope: >-
+      Compose the client-facing reply draft and the owner-facing brief for an inbound client or prospect
+      email, grounded in the analyst's cited brief (data and computed figures). Never sends. Never touches
+      data tools directly.
+    tools: []                      # a drafter gets no data tools — least privilege by construction
+    subagents: [analyst]
+    guardrails: { max_tool_calls: 8, recursion_limit: 40 }
+
+  analyst:
+    identity: { name: analyst, version: 1 }
+    kind: subagent
+    reason: context_isolation_and_tool_scope
+    prompt: analyst
+    model_tier: worker
+    scope: >-
+      Book-of-business analyst. Input: a question about one household, policy, renewal or agreement, or
+      arithmetic over such figures (totals, percent changes, day counts). Output: a brief of at most 12 lines,
+      every figure cited as view.column or [doc:<id>] (computed figures as "computed via run_code"), plus the
+      ids retrieved. Use for any question that needs agency data, document text or exact arithmetic. Returns
+      no raw rows and no code.
+    tools: [sql_query, documents_search, run_code]   # run_code: the ONLY grant for sandboxed execution
+    guardrails: { max_tool_calls: 8 }     # a subagent's loop is bounded by its tool-call cap; recursion_limit applies to the drafter
+
+
+  judge:
+    identity: { name: judge, version: 1 }
+    kind: evaluator
+    prompt: judge_draft
+    model_tier: judge              # cross-family with respect to `worker`
+    scope: Anchored 0–3 rubric judge for client drafts. Eval-time only; never in the serving path.
+    tools: []
+
+graph:
+  name: inbound_crew
+  version: 1
+  # The only node that can lead to a consequential action: it calls LangGraph's interrupt() first thing, the
+  # checkpoint holds the thread until a human decision arrives via Command(resume=...). The graph builder
+  # verifies this node exists and is the one that interrupts.
+  hitl_node: apply_decision
+  recursion_limit: 60

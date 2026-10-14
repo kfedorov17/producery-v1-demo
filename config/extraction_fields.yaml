@@ -1,0 +1,22 @@
+# Field sets handed to the extractor prompt as the volatile part of its input (config, not constants).
+dec_page:
+  named_insured: the named insured (person or business) on the policy
+  carrier: the insurance carrier issuing the policy
+  policy_number: the policy number
+  line_of_business: line of business (e.g. commercial auto, homeowners, BOP, GL)
+  effective_date: policy effective date (YYYY-MM-DD when determinable)
+  expiration_date: policy expiration date (YYYY-MM-DD when determinable)
+  annual_premium: annual/total premium as a number (no $ or commas)
+contract:
+  counterparty_name: the network / aggregator / MGA / carrier counterparty
+  contract_type: network | aggregator | cluster | mga | carrier
+  book_ownership: full | shared | counterparty
+  commission_split_new: Agency share of new-business commission as a number (80, not "80%")
+  commission_split_renewal: Agency share of renewal commission as a number
+  non_compete_months: months of post-termination non-compete/non-solicit (0 when none)
+  termination_notice_days: days of written notice required to terminate
+  term_length_months: initial term length in months (null when evergreen)
+  eo_minimum_usd: minimum E&O coverage per occurrence/claim in USD
+  data_portability: full_export | partial | none
+# low-confidence marker threshold: fields below it are flagged "verify against the document" for the reviewer
+verify_below_confidence: 0.7

@@ -1,0 +1,44 @@
+flowchart TB
+  classDef agent fill:#dbe9ff,stroke:#2f6fdb,color:#0b2a5b
+  classDef tool fill:#dcf5e3,stroke:#2e8b57,color:#0f3d22
+  classDef store fill:#ffe9cc,stroke:#d98b1a,color:#4d2e00
+  classDef ext fill:#eeeeee,stroke:#777,color:#222
+
+  subgraph pg ["PostgreSQL + pgvector — one database, three roles of data"]
+    ckpt[("checkpoints — AsyncPostgresSaver, one per graph step; thread id crew:| eval:| smoke:<email id>")]:::store
+    store[("memory store — AsyncPostgresStore, index on text, 384-d fastembed, namespace memory.<kind>.<agency>.<thread class>")]:::store
+    tables[("app tables — inbox, proposals, outbox, audit_log, run_claims, ui_connections")]:::store
+    docs[("documents + document_chunks — body by content hash, chunk embeddings")]:::store
+    book[("book views — v_households, v_policies, v_renewals, v_appointments (producery_readonly)")]:::store
+  end
+  redis[("redis — arq queue: run_crew, ingest_document, prune_checkpoints")]:::store
+
+  subgraph hot ["Hot path writes — inside a graph turn"]
+    execute["execute — on approve or edit: outbox row, proposal executed exactly once"]:::agent
+    decide["apply_decision / record_rejection — the human decision, recorded on the proposal"]:::agent
+    remember["remember — episodic on every outcome; semantic from an executed record update or an approved reply (confidence, source = proposal id); procedural from a human edit or reasoned reject"]:::agent
+    steps["every node — checkpoint write; stage_proposal → proposals; audit rows with trace id"]:::agent
+  end
+
+  subgraph read ["Read path — retrieval into context"]
+    recall["recall_memory — semantic + procedural by query, episodic by sender (limit 5 / 5 / 3)"]:::agent
+    analystq["analyst via mcp-data — sql_query (views only), documents_search (chunks)"]:::tool
+  end
+
+  subgraph bg ["Background — worker and sweepers"]
+    ingest["ingest_document — chunk + embed, idempotent by content hash (seed, UI upload)"]:::tool
+    prune["prune_checkpoints — daily: crew 30 d, eval 2 d, smoke 1 d (config/retention.yaml)"]:::tool
+    sweep["store TTL sweeper — episodic 180 d; semantic and procedural never expire"]:::tool
+  end
+
+  execute -->|"outbox, proposals"| tables
+  remember -->|"facts, preferences, episodes"| store
+  steps -->|"checkpoints"| ckpt
+  steps -->|"proposals, audit_log"| tables
+  recall -->|"asearch"| store
+  analystq -->|"read-only transaction"| book
+  analystq -->|"hybrid search"| docs
+  ingest -->|"chunks"| docs
+  ingest -->|"job"| redis
+  prune -->|"delete by class"| ckpt
+  sweep -->|"expire"| store

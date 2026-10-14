@@ -1,0 +1,26 @@
+# Deterministic pre-classification High-precision rules that cost nothing;
+# the classifier model runs only when nothing here fires. Order matters: document-type keywords outrank sender identity.
+carriers:
+  - { name: Granite Shield,     domains: [graniteshield.example] }
+  - { name: Keystone Mutual,    domains: [keystonemutual.example] }
+  - { name: Harbor Specialty,   domains: [harborspecialty.example] }
+  - { name: Lakeshore Casualty, domains: [lakeshore.example] }
+networks:
+  - { name: Keystone Insurance Partners, domains: [keystonepartners.example] }
+rules:
+  - class: client_service
+    confidence: 0.8
+    pattern: '\bmy (homeowners|home|auto|car|renters|umbrella|business owners|bop|policy|policies|deductible|claim)\b.{0,80}\b(cover|covered|coverage|renew|renewal|renews|premium|claim|deductible|cancel)'
+    why: a question about the writer's existing policy or coverage is client service, never prospect or personal (conservative rule)
+  - class: billing_commission
+    confidence: 0.85
+    pattern: 'commission (statement|adjustment|chargeback)|chargeback|remittance|invoice|payment (due|received)|billing'
+    why: billing/commission keywords
+  - class: compliance
+    confidence: 0.85
+    pattern: 'department of insurance|(?-i:\bDOI\b)|license (renewal|expir)|continuing education|\bCE (credit|hour|deadline)|annual report filing|E&O (verification|audit)'
+    why: regulator/licensing keywords
+  - class: vendor
+    confidence: 0.75
+    pattern: 'unsubscribe|view in browser|webinar|limited time|special offer|your (order|package|shipment) has shipped'
+    why: bulk-marketing or order-notification markers

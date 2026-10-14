@@ -1,0 +1,188 @@
+# Producery — the full stack. `docker compose up` from a clean checkout (with .env) brings everything live.
+# Every component is its own container with its own image; every service lists the .env variables it reads.
+# K8s mapping: see docs/deployment.md (agent → LangSmith Agent Server; run_code → Sandboxes; Postgres/Redis → managed).
+
+networks:
+  default: {}
+  exec_net:
+    internal: true      # no route to the outside world: the executor cannot reach the internet or the stack
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:  # the database reads only its own three variables
+      POSTGRES_USER: producery
+      POSTGRES_PASSWORD: producery
+      POSTGRES_DB: producery
+    ports: ["5444:5432"]
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U producery -d producery"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: ${BASE_REGISTRY:-public.ecr.aws/docker/library}/redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  seed:
+    build: { context: ., target: seed, args: { REVISION_ID: "${REVISION_ID:-dev}", BASE_REGISTRY: "${BASE_REGISTRY:-public.ecr.aws/docker/library}" } }
+    image: producery/seed:${IMAGE_TAG:?IMAGE_TAG is unset - set IMAGE_TAG=local in .env for a from-source build, or run scripts/pipeline.py deploy}
+    environment:                  # the seed job reads the database and the queue, nothing else
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+      PRODUCERY_ENV: ${PRODUCERY_ENV:-local}
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    restart: "no"
+
+  mcp-data:
+    build: { context: ., target: mcp-data, args: { REVISION_ID: "${REVISION_ID:-dev}", BASE_REGISTRY: "${BASE_REGISTRY:-public.ecr.aws/docker/library}" } }
+    image: producery/mcp-data:${IMAGE_TAG:?IMAGE_TAG is unset - set IMAGE_TAG=local in .env for a from-source build, or run scripts/pipeline.py deploy}
+    environment:                  # only what the data tools need — no LangSmith key, no Redis, no agent URL
+      DATABASE_URL: ${DATABASE_URL}
+      DATABASE_READONLY_ROLE: ${DATABASE_READONLY_ROLE:-producery_readonly}
+      EMBED_MODEL: ${EMBED_MODEL:-BAAI/bge-small-en-v1.5}
+      EMBED_DIMS: ${EMBED_DIMS:-384}
+      FASTEMBED_CACHE: /opt/fastembed
+      PRODUCERY_ENV: ${PRODUCERY_ENV:-local}
+    ports: ["8091:8081"]
+    depends_on:
+      seed: { condition: service_completed_successfully }
+    restart: unless-stopped
+
+  executor:
+    build: { context: ., target: executor, args: { BASE_REGISTRY: "${BASE_REGISTRY:-public.ecr.aws/docker/library}" } }
+    image: producery/executor:${IMAGE_TAG:?IMAGE_TAG is unset - set IMAGE_TAG=local in .env for a from-source build, or run scripts/pipeline.py deploy}
+    networks: [exec_net]          # internal network ONLY
+    read_only: true
+    tmpfs: ["/work:size=128m,mode=0755", "/tmp:size=16m,mode=0755"]   # root-owned roots: snippets write only inside their own run dir
+    cap_drop: [ALL]
+    cap_add: [SETUID, SETGID, CHOWN, DAC_OVERRIDE, FOWNER, KILL]  # daemon only: switch each run to the unprivileged runner user, own and destroy its run dir (the runner itself has no capabilities)
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 512m
+    cpus: 1.0
+    pids_limit: 64
+    environment:                  # the ONLY variables the executor sees — no secrets, no service URLs
+      EXEC_MAX_TIMEOUT_S: ${EXEC_MAX_TIMEOUT_S:-60}
+      EXEC_WORK_ROOT: /work
+    restart: unless-stopped
+
+  mcp-exec:
+    build: { context: ., target: mcp-exec, args: { REVISION_ID: "${REVISION_ID:-dev}", BASE_REGISTRY: "${BASE_REGISTRY:-public.ecr.aws/docker/library}" } }
+    image: producery/mcp-exec:${IMAGE_TAG:?IMAGE_TAG is unset - set IMAGE_TAG=local in .env for a from-source build, or run scripts/pipeline.py deploy}
+    environment:                  # the tool server that fronts untrusted code holds NO secrets at all
+      EXECUTOR_URL: http://executor:9000
+      EXEC_MAX_TIMEOUT_S: ${EXEC_MAX_TIMEOUT_S:-60}
+      CODE_EXECUTOR: ${CODE_EXECUTOR:-sealed}
+      PRODUCERY_ENV: ${PRODUCERY_ENV:-local}
+    networks: [default, exec_net] # bridge: reachable by the agent, can reach the executor
+    ports: ["8092:8082"]
+    depends_on: [executor]
+    restart: unless-stopped
+
+  agent:
+    build: { context: ., target: agent, args: { REVISION_ID: "${REVISION_ID:-dev}", BASE_REGISTRY: "${BASE_REGISTRY:-public.ecr.aws/docker/library}" } }
+    image: producery/agent:${IMAGE_TAG:?IMAGE_TAG is unset - set IMAGE_TAG=local in .env for a from-source build, or run scripts/pipeline.py deploy}
+    environment:                  # every application variable; not the web session secret, not the host-side harness URLs
+      PRODUCERY_ENV: ${PRODUCERY_ENV}
+      AGENCY_ID: ${AGENCY_ID}
+      AGENT_API_TOKEN: ${AGENT_API_TOKEN}
+      LANGSMITH_TRACING: ${LANGSMITH_TRACING}
+      LANGSMITH_API_KEY: ${LANGSMITH_API_KEY}
+      LANGSMITH_PROJECT: ${LANGSMITH_PROJECT}
+      LANGSMITH_ENDPOINT: ${LANGSMITH_ENDPOINT}
+      LANGSMITH_MASK_PII: ${LANGSMITH_MASK_PII}
+      MODEL_ACCESS_MODE: ${MODEL_ACCESS_MODE}
+      LANGSMITH_GATEWAY_BASE_URL: ${LANGSMITH_GATEWAY_BASE_URL}
+      MODEL_DOOR_LABEL: ${MODEL_DOOR_LABEL}
+      PROMPTS_SOURCE: ${PROMPTS_SOURCE}
+      PROMPT_HUB_PREFIX: ${PROMPT_HUB_PREFIX}
+      PROMPTS_LOCAL_FALLBACK: ${PROMPTS_LOCAL_FALLBACK}
+      DATABASE_URL: ${DATABASE_URL}
+      DATABASE_READONLY_ROLE: ${DATABASE_READONLY_ROLE}
+      REDIS_URL: ${REDIS_URL}
+      AGENT_URL: ${AGENT_URL}
+      MCP_DATA_URL: ${MCP_DATA_URL}
+      MCP_EXEC_URL: ${MCP_EXEC_URL}
+      EXECUTOR_URL: ${EXECUTOR_URL}
+      CODE_EXECUTOR: ${CODE_EXECUTOR}
+      EMBED_MODEL: ${EMBED_MODEL}
+      EMBED_DIMS: ${EMBED_DIMS}
+      FASTEMBED_CACHE: ${FASTEMBED_CACHE}
+      MODEL_TIMEOUT_S: ${MODEL_TIMEOUT_S}
+      MCP_TIMEOUT_S: ${MCP_TIMEOUT_S}
+      EXEC_MAX_TIMEOUT_S: ${EXEC_MAX_TIMEOUT_S}
+      TURN_TIMEOUT_S: ${TURN_TIMEOUT_S}
+    ports: ["8010:8000"]
+    depends_on:
+      seed: { condition: service_completed_successfully }
+      mcp-data: { condition: service_healthy }
+      mcp-exec: { condition: service_healthy }
+    restart: unless-stopped
+
+  worker:
+    build: { context: ., target: worker, args: { REVISION_ID: "${REVISION_ID:-dev}", BASE_REGISTRY: "${BASE_REGISTRY:-public.ecr.aws/docker/library}" } }
+    image: producery/worker:${IMAGE_TAG:?IMAGE_TAG is unset - set IMAGE_TAG=local in .env for a from-source build, or run scripts/pipeline.py deploy}
+    environment:                  # same set as the agent
+      PRODUCERY_ENV: ${PRODUCERY_ENV}
+      AGENCY_ID: ${AGENCY_ID}
+      AGENT_API_TOKEN: ${AGENT_API_TOKEN}
+      LANGSMITH_TRACING: ${LANGSMITH_TRACING}
+      LANGSMITH_API_KEY: ${LANGSMITH_API_KEY}
+      LANGSMITH_PROJECT: ${LANGSMITH_PROJECT}
+      LANGSMITH_ENDPOINT: ${LANGSMITH_ENDPOINT}
+      LANGSMITH_MASK_PII: ${LANGSMITH_MASK_PII}
+      MODEL_ACCESS_MODE: ${MODEL_ACCESS_MODE}
+      LANGSMITH_GATEWAY_BASE_URL: ${LANGSMITH_GATEWAY_BASE_URL}
+      MODEL_DOOR_LABEL: ${MODEL_DOOR_LABEL}
+      PROMPTS_SOURCE: ${PROMPTS_SOURCE}
+      PROMPT_HUB_PREFIX: ${PROMPT_HUB_PREFIX}
+      PROMPTS_LOCAL_FALLBACK: ${PROMPTS_LOCAL_FALLBACK}
+      DATABASE_URL: ${DATABASE_URL}
+      DATABASE_READONLY_ROLE: ${DATABASE_READONLY_ROLE}
+      REDIS_URL: ${REDIS_URL}
+      AGENT_URL: ${AGENT_URL}
+      MCP_DATA_URL: ${MCP_DATA_URL}
+      MCP_EXEC_URL: ${MCP_EXEC_URL}
+      EXECUTOR_URL: ${EXECUTOR_URL}
+      CODE_EXECUTOR: ${CODE_EXECUTOR}
+      EMBED_MODEL: ${EMBED_MODEL}
+      EMBED_DIMS: ${EMBED_DIMS}
+      FASTEMBED_CACHE: ${FASTEMBED_CACHE}
+      MODEL_TIMEOUT_S: ${MODEL_TIMEOUT_S}
+      MCP_TIMEOUT_S: ${MCP_TIMEOUT_S}
+      EXEC_MAX_TIMEOUT_S: ${EXEC_MAX_TIMEOUT_S}
+      TURN_TIMEOUT_S: ${TURN_TIMEOUT_S}
+    ports: ["8090:8090"]
+    depends_on:
+      seed: { condition: service_completed_successfully }
+      agent: { condition: service_healthy }
+    restart: unless-stopped
+
+  web:
+    build: { context: ., dockerfile: web/Dockerfile, target: web, args: { BASE_REGISTRY: "${BASE_REGISTRY:-public.ecr.aws/docker/library}" } }
+    image: producery/web:${IMAGE_TAG:?IMAGE_TAG is unset - set IMAGE_TAG=local in .env for a from-source build, or run scripts/pipeline.py deploy}
+    environment:                  # the ONLY service besides agent/worker that holds the agent token — server side only
+      AGENT_URL: http://agent:8000
+      AGENT_API_TOKEN: ${AGENT_API_TOKEN}
+      SESSION_SECRET: ${SESSION_SECRET}
+      COOKIE_SECURE: ${COOKIE_SECURE:-0}
+      PRODUCERS_FILE: /app/config/producers.yaml
+      LANGSMITH_ORG_ID: ${LANGSMITH_ORG_ID:-}
+      LANGSMITH_PROJECT_ID: ${LANGSMITH_PROJECT_ID:-}
+    ports: ["3010:3000"]
+    volumes: ["./config/producers.yaml:/app/config/producers.yaml:ro"]
+    depends_on:
+      agent: { condition: service_healthy }
+    restart: unless-stopped
+
+volumes:
+  pgdata: {}

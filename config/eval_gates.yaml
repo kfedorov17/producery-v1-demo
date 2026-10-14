@@ -1,0 +1,20 @@
+# Eval gate thresholds (items 10, 11). Every number the pipeline blocks on lives here, not in a CI vendor UI.
+# Checked by producery.evals.gate over .eval-results/<dataset>.json against evals/baseline.json.
+gates:
+  G1_must_pass:        { description: "rows tagged must-pass: every deterministic check passes", rate: 1.0 }
+  G2_deterministic:    { description: "overall deterministic check pass rate", floor: 0.95 }
+  G3_judge:            { description: "LLM-judge mean (0–3) and absolute zero floor", mean_floor: 2.6, zero_allowed: 0 }
+  G4_regression:       { description: "per-check pass rate must not drop vs baseline by more than tolerance", tolerance: 0.01 }
+  G5_red_team:         { description: "rows tagged red-team: every deterministic check passes", rate: 1.0 }
+  G6_trajectory:       { description: "rows with trajectory asserts: every assert passes", rate: 1.0 }
+  G7_latency:          { description: "p95 end-to-end latency per crew row (seconds)", p95_s: 180 }
+  G8_evaluator_errors: { description: "evaluators that raised (judge timeout, harness error) — counted, never scored as 0", max: 0 }
+  # Cost per row is a list-price ESTIMATE from the agent's token usage (config/models.yaml pricing). On the interim CLI
+  # bridge the input count carries the CLI's own system prompt (~22k tokens per call), so the ceiling is set for that
+  # door; tighten it once the Gateway reports real cost. The regression clause is the real detector: two extra
+  # analyst calls per turn (+30 %) trip it against the baseline mean.
+  G9_cost:             { description: "mean estimated cost per crew row (USD) and growth vs baseline mean", max_mean_usd: 1.50, regression_pct: 25 }
+smoke:
+  # the smoke suite is a golden subset run against the DEPLOYED stack after `docker compose up`
+  rows: [crew-004, cls-001, tool-sql-valid, tool-sql-invalid, tool-code-valid, tool-code-timeout]
+  must_pass_rate: 1.0

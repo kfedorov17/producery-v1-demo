@@ -1,0 +1,23 @@
+# Prompt pins. Written ONLY by scripts/prompts_push.py; read at startup by producery.prompts.hub.
+# key = local prompt name (prompts/<name>.yaml); hub_name = LangSmith Hub prompt; commit = immutable commit hash.
+pins:
+  analyst:
+    commit: eccdae2a
+    fingerprint: b798179cc6ca5351
+    hub_name: producery-analyst
+  classifier:
+    commit: bb7d511f
+    fingerprint: 1588fd7be53237f5
+    hub_name: producery-classifier
+  drafter:
+    commit: be8d0e30
+    fingerprint: 59e43e376fe8a590
+    hub_name: producery-drafter
+  extractor:
+    commit: 76391e1c
+    fingerprint: 05da1aa25b2bd4fe
+    hub_name: producery-extractor
+  judge_draft:
+    commit: 08ec7154
+    fingerprint: 2bc3b7036a937a8e
+    hub_name: producery-judge-draft

@@ -1,0 +1,45 @@
+# The ONE pipeline definition. `scripts/pipeline.py <stage>` executes it locally or in CI; the GitHub
+# workflow only calls those stages. Every gate and threshold is config in this repo (thresholds: config/eval_gates.yaml).
+image_tag: "${GIT_SHA}"            # resolved by scripts/pipeline.py from `git rev-parse --short HEAD`
+compose_project: producery
+
+stages:
+  ci:
+    description: lint → type-check → unit tests (python + web) → build images → stack up → web e2e → offline eval suite (hard gate)
+    steps:
+      - { name: lint,       run: "python -m ruff check producery scripts tests evals/evaluators && python -m ruff format --check producery scripts tests evals/evaluators" }
+      - { name: typecheck,  run: "python -m mypy" }
+      - { name: unit,       run: "python -m pytest -q" }
+      - { name: web-typecheck, run: "npm --prefix web ci --no-audit --no-fund && npm --prefix web run typecheck" }
+      - { name: web-unit,   run: "npm --prefix web test" }
+      - { name: build,      run: "docker compose build", env: { IMAGE_TAG: "${GIT_SHA}", REVISION_ID: "${GIT_SHA}" } }
+      # library images (redis, postgres) come from public registries that rate-limit shared runner IPs: pull with retries first
+      - { name: stack-up,   run: "python scripts/pipeline.py pull-images && docker compose up -d --wait", env: { IMAGE_TAG: "${GIT_SHA}" } }
+      - { name: wait-ready, run: "python scripts/pipeline.py wait-ready" }
+      - { name: prompts-check, run: "python scripts/prompts_push.py --check" }
+      - { name: web-e2e,    run: "npx --prefix web playwright install --with-deps chromium && npm --prefix web run e2e" }
+      - { name: gate-self-test, run: "python scripts/pipeline.py prove-gate", gate: true }   # the gate must be able to go RED
+      # The hosted runner's .env sets LANGSMITH_TRACING=false (workflow), so its evals record locally and spend no trace
+      # quota; a developer host keeps tracing on and its runs land in LangSmith as experiments.
+      # A host with no model door (/ready → model_door_configured false: GitHub-hosted runners, where neither the LLM
+      # Gateway nor the interim bridge is reachable) runs `without_door`: the model-free tools dataset, gated below.
+      # The model-dependent datasets are gated where a door exists (a developer host with `make bridge`, or the
+      # Gateway once it is enabled), which is how image tags get promoted. There is no flag to skip the gate.
+      - { name: offline-evals, run: "python -m producery.evals.run --all --prefix ci-${GIT_SHA}", without_door: "python -m producery.evals.run tools --prefix ci-${GIT_SHA}", needs_model_door: true, env: { REVISION_ID: "${GIT_SHA}" } }   # experiment metadata names the build under test
+      - { name: eval-gate,  run: "python -m producery.evals.gate", gate: true }   # gates every result file the step above produced
+  cd:
+    description: deploy the green image tag via compose → smoke eval against the live stack → promote or roll back
+    steps:
+      - { name: deploy,     run: "python scripts/pipeline.py deploy --tag ${GIT_SHA}" }
+      - { name: wait-ready, run: "python scripts/pipeline.py wait-ready" }
+      - { name: smoke-eval, run: "python -m producery.evals.run --suite smoke", gate: true, on_fail: "python scripts/pipeline.py rollback", env: { REVISION_ID: "${GIT_SHA}" } }
+      - { name: promote,    run: "python scripts/pipeline.py promote --tag ${GIT_SHA}" }
+  post:
+    description: online scoring over the deployed instance's traces → LangSmith feedback → baseline refresh
+    steps:
+      - { name: online-scoring, run: "python -m producery.evals.online", gate: true }
+      - { name: baseline,       run: "python -m producery.evals.gate --write-baseline" }
+
+rollback:
+  strategy: redeploy previous image tags (pipeline/.deploy/previous_tag) with `docker compose up -d`
+  state_file: pipeline/.deploy/current_tag

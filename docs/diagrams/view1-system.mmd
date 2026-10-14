@@ -1,0 +1,64 @@
+flowchart LR
+  %% Legend (also in architecture.md): blue = agents and graph code, green = tool services, orange = stores,
+  %% purple = LangSmith plane, grey = outside the system, red dashed = trust boundary.
+  classDef agent fill:#dbe9ff,stroke:#2f6fdb,color:#0b2a5b
+  classDef tool fill:#dcf5e3,stroke:#2e8b57,color:#0f3d22
+  classDef store fill:#ffe9cc,stroke:#d98b1a,color:#4d2e00
+  classDef ls fill:#ece0ff,stroke:#7a3fd1,color:#2d0f5c
+  classDef ext fill:#eeeeee,stroke:#777,color:#222
+  classDef boundary fill:none,stroke:#c0392b,stroke-dasharray:6 4
+
+  email(["inbound email — an inbox row (status new)"]):::ext
+  producer(["producer — the licensed human"]):::ext
+
+  subgraph entry ["Entry — how work arrives and decisions return"]
+    web["web — producer UI (Next.js): Today, Approve, Thread, Clients, Documents, Connections, Settings"]:::agent
+    worker["worker — arq jobs: poll_inbox, run_crew, ingest_document, prune_checkpoints"]:::agent
+  end
+
+  subgraph agents ["Agent layer — agent service, one LangGraph graph"]
+    agent["agent — FastAPI + inbound_crew graph, 13 nodes: intake, recall_memory, classify, extract_document, respond, task_proposal, archive, compliance_gate, stage_proposal, apply_decision (interrupt), execute, record_rejection, remember"]:::agent
+    drafter["drafter — deep agent (create_deep_agent): reply + owner brief; only tool = task"]:::agent
+    analyst["analyst — subagent: ≤ 12-line cited brief; tools sql_query, documents_search, run_code"]:::agent
+  end
+
+  subgraph caps ["Capability layer — MCP tool services, no model inside"]
+    mcpdata["mcp-data — sql_query over 4 views, documents_search (hybrid)"]:::tool
+    mcpexec["mcp-exec — run_code front door"]:::tool
+    subgraph sealed ["exec_net: internal only — no egress, read-only root, no secrets"]
+      executor["executor — fresh python -I per run, uid drop, rlimits, dir destroyed"]:::tool
+    end
+  end
+
+  subgraph doorbox ["Model door — no provider keys past this line"]
+    door["model door — one ChatOpenAI client per agent and tier (config/models.yaml) → LangSmith LLM Gateway, or the flagged interim bridge"]:::agent
+  end
+
+  subgraph state ["State — PostgreSQL (pgvector) and Redis"]
+    tables[("app tables — inbox, proposals, outbox, audit_log, documents + document_chunks; book views v_*")]:::store
+    ckpt[("checkpoints + memory store — AsyncPostgresSaver, AsyncPostgresStore (384-d index)")]:::store
+    redis[("redis — arq job queue")]:::store
+  end
+
+  subgraph lsplane ["LangSmith plane — beside the flow, never in it"]
+    langsmith["LangSmith — traces with version metadata, Prompt Hub pins, datasets + experiments, online scoring, annotation queue"]:::ls
+  end
+
+  email -->|"status new, claimed by poll_inbox"| worker
+  producer -->|"session cookie; no agent token in the browser"| web
+  web -->|"server-side: reads, POST /inbox, POST /threads/id/resume (by = producer)"| agent
+  worker -->|"run_crew → POST /runs, polls inbox status"| agent
+  worker -->|"jobs"| redis
+  agent -->|"respond node: email as data + recalled memory"| drafter
+  drafter -->|"task: one question"| analyst
+  analyst -->|"cited brief ≤ 12 lines, no raw rows"| drafter
+  analyst -->|"MCP tool calls"| mcpdata
+  analyst -->|"MCP run_code"| mcpexec
+  mcpexec -->|"POST /run on exec_net"| executor
+  agent -->|"every model call (classifier, extractor, drafter, analyst)"| door
+  mcpdata -->|"SET LOCAL ROLE producery_readonly — every book read, tools and UI alike"| tables
+  agent -->|"proposal, outbox row on approve, audit rows, documents"| tables
+  agent -->|"checkpoint per step; memory write policies"| ckpt
+  door -.->|"traced calls"| langsmith
+  agent -.->|"traces: prompts, models, revision, thread"| langsmith
+  class sealed,doorbox boundary

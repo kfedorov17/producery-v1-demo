@@ -1,0 +1,30 @@
+{
+  "dependencies": [
+    "."
+  ],
+  "graphs": {
+    "inbound_crew": "./producery/graphs/entrypoint.py:graph"
+  },
+  "env": "./.env",
+  "checkpointer": {
+    "ttl": {
+      "strategy": "delete",
+      "default_ttl": 43200,
+      "sweep_interval_minutes": 60
+    }
+  },
+  "store": {
+    "index": {
+      "embed": "./producery/memory/embed.py:embed_texts",
+      "dims": 384,
+      "fields": [
+        "text"
+      ]
+    },
+    "ttl": {
+      "default_ttl": null,
+      "refresh_on_read": false,
+      "sweep_interval_minutes": 60
+    }
+  }
+}

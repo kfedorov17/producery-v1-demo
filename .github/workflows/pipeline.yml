@@ -1,0 +1,63 @@
+# The workflow only calls the stages defined in pipeline/pipeline.yaml — nothing is defined only here.
+name: pipeline
+on:
+  push: { branches: [main] }
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+concurrency:
+  group: pipeline-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    env:
+      LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
+      AGENT_API_TOKEN: ${{ secrets.AGENT_API_TOKEN || format('ci-{0}', github.run_id) }}
+      LANGSMITH_GATEWAY_BASE_URL: ${{ vars.LANGSMITH_GATEWAY_BASE_URL }}
+      MODEL_ACCESS_MODE: ${{ vars.MODEL_ACCESS_MODE || 'gateway' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - run: pip install -e ".[dev]"
+      - run: |
+          cp .env.example .env
+          sed -i "s|^LANGSMITH_API_KEY=.*|LANGSMITH_API_KEY=${LANGSMITH_API_KEY}|; s|^MODEL_ACCESS_MODE=.*|MODEL_ACCESS_MODE=${MODEL_ACCESS_MODE}|; s|^AGENT_API_TOKEN=.*|AGENT_API_TOKEN=${AGENT_API_TOKEN}|; s|^SESSION_SECRET=.*|SESSION_SECRET=$(openssl rand -hex 32)|; s|^LANGSMITH_TRACING=.*|LANGSMITH_TRACING=false|" .env
+      - run: make -n setup test evals pipeline-ci web-e2e producer NAME=x > /dev/null   # the Makefile must parse
+      - run: python scripts/pipeline.py ci
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: eval-results, path: .eval-results/, include-hidden-files: true }   # v4 skips dotfiles by default
+
+  cd:
+    needs: ci
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    env:
+      LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
+      AGENT_API_TOKEN: ${{ secrets.AGENT_API_TOKEN || format('ci-{0}', github.run_id) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - run: pip install -e ".[dev]"
+      - run: cp .env.example .env && sed -i "s|^LANGSMITH_API_KEY=.*|LANGSMITH_API_KEY=${LANGSMITH_API_KEY}|; s|^AGENT_API_TOKEN=.*|AGENT_API_TOKEN=${AGENT_API_TOKEN}|; s|^SESSION_SECRET=.*|SESSION_SECRET=$(openssl rand -hex 32)|; s|^LANGSMITH_TRACING=.*|LANGSMITH_TRACING=false|" .env
+      - run: python scripts/pipeline.py cd
+
+  post:
+    needs: cd
+    runs-on: ubuntu-latest
+    env:
+      LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
+      AGENT_API_TOKEN: ${{ secrets.AGENT_API_TOKEN || format('ci-{0}', github.run_id) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - run: pip install -e ".[dev]"
+      - run: cp .env.example .env && sed -i "s|^LANGSMITH_API_KEY=.*|LANGSMITH_API_KEY=${LANGSMITH_API_KEY}|; s|^AGENT_API_TOKEN=.*|AGENT_API_TOKEN=${AGENT_API_TOKEN}|; s|^SESSION_SECRET=.*|SESSION_SECRET=$(openssl rand -hex 32)|; s|^LANGSMITH_TRACING=.*|LANGSMITH_TRACING=false|" .env
+      - run: python scripts/pipeline.py post

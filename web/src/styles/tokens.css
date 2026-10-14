@@ -1,0 +1,59 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Design tokens (teal #1ab394 actions, navy #001f33 headings,
+   cyan #00beee accents). */
+:root {
+  --color-bg: #f3f3f4;
+  --color-surface: #ffffff;
+  --color-line: #e7eaec;
+  --color-text: #2f4050;
+  --color-muted: #676a6c;
+  --color-primary: #1ab394;
+  --color-primary-hover: #17987e;
+  --color-accent: #00beee;
+  --color-heading-accent: #001f33;
+  --color-success-bg: #e9f6da;
+  --color-success-fg: #55830b;
+  --color-warning-bg: #fef3c7;
+  --color-warning-fg: #b45309;
+  --color-danger-bg: #fde8e8;
+  --color-danger-fg: #c02929;
+  --color-chip-bg: #eef1f2;
+  --color-chip-accent-bg: #d8f4fb;
+  --color-hover: #f0f4f5;
+}
+
+body {
+  @apply text-ink font-sans antialiased;
+  font-size: 14px;
+  background-color: #f3f3f4;
+  background-image:
+    radial-gradient(900px 520px at 12% -8%, rgb(26 179 148 / 0.16), rgb(26 179 148 / 0) 60%),
+    radial-gradient(1000px 620px at 92% -4%, rgb(0 190 238 / 0.14), rgb(0 190 238 / 0) 62%),
+    linear-gradient(180deg, #fbfcfd 0%, #f3f4f5 45%, #eceff0 100%);
+  background-attachment: fixed;
+}
+
+.text-grad-brand {
+  background-image: linear-gradient(95deg, #1ab394 15%, #00beee 90%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.bg-grad-bar {
+  background-image: linear-gradient(100deg, #1ab394 0%, #0099c2 100%);
+}
+.bg-grad-bar:hover,
+.bg-grad-bar-open {
+  background-image: linear-gradient(100deg, #12977c 0%, #0080a6 100%);
+}
+
+.card { @apply rounded-card border border-line bg-surface p-4; }
+.card-hover { @apply transition-shadow hover:shadow-cardhover; }
+.disclaimer { @apply mt-3 text-[12px] leading-snug text-muted; }
+.input { @apply rounded-input border border-line bg-surface px-3 py-2 text-sm text-ink outline-none focus:border-accent; }
+
+.no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }

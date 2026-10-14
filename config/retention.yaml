@@ -1,0 +1,14 @@
+# Checkpoint retention per thread class. Thread ids are "<class>:<id>".
+# Compose: the worker's daily prune job deletes threads older than ttl_days through the checkpointer API.
+# LangSmith Deployment / Agent Server: langgraph.json carries ONE checkpointer.ttl (30 d) for every class; per-class
+# pruning there means running the worker's prune job against the Deployment database (docs/deployment.md §5).
+thread_classes:
+  crew:  { ttl_days: 30 }     # production inbound threads (audit lives in Postgres tables, not checkpoints)
+  eval:  { ttl_days: 2 }      # evaluation runs
+  smoke: { ttl_days: 1 }      # pipeline smoke evals
+default_ttl_days: 7
+# Long-term memory store TTLs (days); null = keep
+memory:
+  semantic: null
+  episodic: 180
+  procedural: null
