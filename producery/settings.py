@@ -1,4 +1,8 @@
-"""12-factor configuration. Every module receives a `Settings` instance; nobody reads os.environ directly."""
+"""12-factor configuration. Every application module receives a `Settings` instance.
+
+The stdlib-only executor daemon, the host-side bridge and the host scripts are the documented exceptions that read
+the environment directly.
+"""
 
 from __future__ import annotations
 

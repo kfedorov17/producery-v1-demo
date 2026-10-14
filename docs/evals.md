@@ -9,8 +9,10 @@ a 29-row suite with edge, failure and red-team rows, and three LLM judges on top
 
 The system's worst failure is not a wrong answer but an unapproved or non-compliant client contact, so the
 metric set is ordered by that risk. Deterministic checks come first — never pay a judge for what a regex can
-score; the LLM judge is an instrument (different model family than the tier under test, anchored levels,
-temperature 0) used only for draft quality.
+score; the LLM judge is an instrument (different model family than the tier under test by configuration,
+anchored levels, temperature 0) used only for draft quality. On the interim bridge every tier is served by the
+same CLI model, so the recorded judge scores are same-family; the cross-family property holds once the Gateway
+serves the configured tiers.
 
 | Check (key) | Type | Where it runs | Protects |
 |---|---|---|---|
@@ -26,7 +28,7 @@ temperature 0) used only for draft quality.
 | `cites_approved` (`cites`) | deterministic | SDK-local | **cited ⊆ retrieved ∩ approved** — citations must be approved sources and must appear in what the tools actually returned |
 | `tool_result` | deterministic | SDK-local | each tool path: valid args → typed result; invalid args → teaching error code |
 | `latency_under` (`latency`) | deterministic | SDK-local | per-row latency budget |
-| `judge_rubric` (`judge`) | LLM-as-judge, anchored 0–3, cross-family (`judge` tier ≠ `worker` family) | SDK-local only (model family pinned by config) | draft quality beyond rule-passing; 0 = violation floor |
+| `judge_rubric` (`judge`) | LLM-as-judge, anchored 0–3, cross-family by configuration (`judge` tier ≠ `worker` family; same-family on the interim bridge) | SDK-local only (model family pinned by config) | draft quality beyond rule-passing; 0 = violation floor; no verdict when there is no draft |
 
 The judge stays SDK-local so its model family is pinned by `config/models.yaml`.
 Pairwise A/B of prompt variants can use `langsmith.evaluate_comparative` over two experiments; nothing in the repository scripts it.
@@ -48,7 +50,7 @@ Rows name their checks in `metadata.checks` (an allowlist — unknown names fail
 | Gate | Threshold |
 |---|---|
 | G1 must-pass rows | 100 % of deterministic checks pass |
-| G2 deterministic pass rate | ≥ 0.95 |
+| G2 deterministic pass rate | ≥ 0.95 of rows with every deterministic check at 1 (row-level, not per check) |
 | G3 judge | mean ≥ 2.6 and zero rows scored 0 |
 | G4 regression | no per-check pass rate drops > 0.01 below `evals/baseline.json` |
 | G5 red-team rows | 100 % |

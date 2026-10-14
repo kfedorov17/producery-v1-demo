@@ -12,7 +12,7 @@ export interface ProducerAccount {
   password_hash: string;
 }
 
-/** The hash shipped in config/producers.yaml for the demo producer (password in README). A deployment that
+/** The hash shipped in config/producers.yaml for the demo producer (password in docs/cookbook/first-turn.md). A deployment that
  *  terminates TLS (COOKIE_SECURE=1) refuses to serve while this hash is still in the roster: `make producer` rotates it. */
 export const DEMO_HASH = "$2a$10$b4NpI.08ttAltw0vDbWOPOgmiO46Re8zC9WLgPe671vizM5QpbdDm";
 

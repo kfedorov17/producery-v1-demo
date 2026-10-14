@@ -644,6 +644,7 @@ class CrewNodes:
         outcome = state.get("outcome") or "done"
         decision = state.get("decision") or {}
         written: list[str] = []
+        writes: list[dict[str, Any]] = []  # what was written, for the trajectory and the evaluators
         memory = self._memory()
         try:
             # episodic — every terminal outcome; for personal mail only the fact of archiving, with the sender withheld
@@ -666,13 +667,15 @@ class CrewNodes:
                     value, conf = v.get("value"), float(v.get("confidence") or 0.0)
                     if value is None or conf < verify_below:
                         continue  # unverified extractions never become facts
+                    text = (
+                        f"{email.get('from_name')}: {k} = {value} (from [doc:{payload.get('document_id')}])"
+                    )
                     written.append(
                         await memory.write_semantic(
-                            f"{email.get('from_name')}: {k} = {value} (from [doc:{payload.get('document_id')}])",
-                            source=state["decision"]["proposal_id"],
-                            confidence=conf,
+                            text, source=state["decision"]["proposal_id"], confidence=conf
                         )
                     )
+                    writes.append({"kind": "semantic", "text": text})
             # semantic — the cited findings of a client reply the owner approved (or edited and sent): every kept
             # citation is ⊆ retrieved ids (filter_citations), the human decision is the confirmation
             if outcome.startswith("send_email") and outcome.endswith("executed"):
@@ -680,36 +683,38 @@ class CrewNodes:
                     str((state.get("proposal") or {}).get("owner_brief") or ""),
                     list(state.get("citations") or []),
                 ):
+                    text = f"{email.get('from_name') or email.get('from_email')}: {fact}"
                     written.append(
                         await memory.write_semantic(
-                            f"{email.get('from_name') or email.get('from_email')}: {fact}",
-                            source=state["decision"]["proposal_id"],
-                            confidence=1.0,
+                            text, source=state["decision"]["proposal_id"], confidence=1.0
                         )
                     )
+                    writes.append({"kind": "semantic", "text": text})
             # procedural — only from human edits or reasoned rejections
             if decision.get("action") == "edit" and decision.get("payload"):
                 body = str(decision["payload"].get("body") or "")[:400]
+                text = f"Owner edited a {cls} reply to: {body}"
                 written.append(
-                    await memory.write_procedural(
-                        f"Owner edited a {cls} reply to: {body}",
-                        origin="human_edit",
-                        source=decision["proposal_id"],
-                    )
+                    await memory.write_procedural(text, origin="human_edit", source=decision["proposal_id"])
                 )
+                writes.append({"kind": "procedural", "text": text})
             if decision.get("action") == "reject" and decision.get("reason"):
+                text = f"Owner rejects {cls} drafts when: {decision['reason']}"
                 written.append(
-                    await memory.write_procedural(
-                        f"Owner rejects {cls} drafts when: {decision['reason']}",
-                        origin="human_reject",
-                        source=decision["proposal_id"],
-                    )
+                    await memory.write_procedural(text, origin="human_reject", source=decision["proposal_id"])
                 )
+                writes.append({"kind": "procedural", "text": text})
         except Exception as e:
             logger.warning("memory_write_failed err=%s", e)
-            return {"outcome": outcome, "error": f"memory write failed: {e}"[:200], "path": ["remember"]}
+            return {
+                "outcome": outcome,
+                "error": f"memory write failed: {e}"[:200],
+                "memory_writes": writes,
+                "path": ["remember"],
+            }
         return {
             "outcome": outcome,
             "artifacts": {"memories_written": json.dumps(written)},
+            "memory_writes": writes,
             "path": ["remember"],
         }

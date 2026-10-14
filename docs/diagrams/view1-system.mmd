@@ -49,15 +49,16 @@ flowchart LR
   web -->|"server-side: reads, POST /inbox, POST /threads/id/resume (by = producer)"| agent
   worker -->|"run_crew → POST /runs, polls inbox status"| agent
   worker -->|"jobs"| redis
+  agent -->|"ingest_document job on upload"| redis
   agent -->|"respond node: email as data + recalled memory"| drafter
   drafter -->|"task: one question"| analyst
   analyst -->|"cited brief ≤ 12 lines, no raw rows"| drafter
   analyst -->|"MCP tool calls"| mcpdata
   analyst -->|"MCP run_code"| mcpexec
   mcpexec -->|"POST /run on exec_net"| executor
-  agent -->|"every model call (classifier, extractor, drafter, analyst)"| door
-  mcpdata -->|"SET LOCAL ROLE producery_readonly — every book read, tools and UI alike"| tables
-  agent -->|"proposal, outbox row on approve, audit rows, documents"| tables
+  agent -->|"every model call (classifier, extractor, drafter, analyst; the judge at eval time)"| door
+  mcpdata -->|"SET LOCAL ROLE producery_readonly — every tool read of the book"| tables
+  agent -->|"proposal, outbox row on approve, audit rows, documents; UI book reads as producery_readonly"| tables
   agent -->|"checkpoint per step; memory write policies"| ckpt
   door -.->|"traced calls"| langsmith
   agent -.->|"traces: prompts, models, revision, thread"| langsmith

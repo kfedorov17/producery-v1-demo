@@ -5,8 +5,8 @@ flowchart TB
   classDef ext fill:#eeeeee,stroke:#777,color:#222
 
   subgraph pg ["PostgreSQL + pgvector — one database, three roles of data"]
-    ckpt[("checkpoints — AsyncPostgresSaver, one per graph step; thread id crew:| eval:| smoke:<email id>")]:::store
-    store[("memory store — AsyncPostgresStore, index on text, 384-d fastembed, namespace memory.<kind>.<agency>.<thread class>")]:::store
+    ckpt[("checkpoints — AsyncPostgresSaver, one per graph step; thread id crew:ID, eval:ID or smoke:ID")]:::store
+    store[("memory store — AsyncPostgresStore, index on text, 384-d fastembed, namespace memory.KIND.AGENCY.CLASS")]:::store
     tables[("app tables — inbox, proposals, outbox, audit_log, run_claims, ui_connections")]:::store
     docs[("documents + document_chunks — body by content hash, chunk embeddings")]:::store
     book[("book views — v_households, v_policies, v_renewals, v_appointments (producery_readonly)")]:::store
@@ -25,13 +25,14 @@ flowchart TB
     analystq["analyst via mcp-data — sql_query (views only), documents_search (chunks)"]:::tool
   end
 
-  subgraph bg ["Background — worker and sweepers"]
+  subgraph bg ["Background — worker jobs and the store sweeper"]
     ingest["ingest_document — chunk + embed, idempotent by content hash (seed, UI upload)"]:::tool
     prune["prune_checkpoints — daily: crew 30 d, eval 2 d, smoke 1 d (config/retention.yaml)"]:::tool
-    sweep["store TTL sweeper — episodic 180 d; semantic and procedural never expire"]:::tool
+    sweep["store TTL sweeper (runs in the agent process) — episodic 180 d; semantic and procedural never expire"]:::tool
   end
 
   execute -->|"outbox, proposals"| tables
+  decide -->|"proposal status + reason, audit_log"| tables
   remember -->|"facts, preferences, episodes"| store
   steps -->|"checkpoints"| ckpt
   steps -->|"proposals, audit_log"| tables

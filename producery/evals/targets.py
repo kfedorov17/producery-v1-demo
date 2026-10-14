@@ -92,8 +92,8 @@ def crew_target(inputs: dict[str, Any]) -> dict[str, Any]:
         inputs: The row inputs: `email` (required) plus optional `decision`, `reason` and `payload`.
 
     Returns:
-        Classification, extraction, draft, proposal, flags, citations, tool calls, outcome, error, path,
-        thread id, trace ids, latency, usage, tokens and estimated cost.
+        Classification, extraction, draft, proposal, flags, citations, tool calls, memory writes, outcome,
+        error, path, thread id, trace ids, latency, usage, tokens and estimated cost.
     """
     email = dict(inputs["email"])
     email["id"] = f"{email.get('id') or 'row'}-{uuid.uuid4().hex[:8]}"
@@ -129,6 +129,7 @@ def crew_target(inputs: dict[str, Any]) -> dict[str, Any]:
         "compliance_flags": values.get("compliance_flags") or [],
         "citations": values.get("citations") or [],
         "tool_calls": calls,
+        "memory_writes": values.get("memory_writes") or [],
         "outcome": values.get("outcome"),
         "error": values.get("error"),
         "path": values.get("path") or [],

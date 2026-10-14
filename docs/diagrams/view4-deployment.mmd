@@ -6,21 +6,23 @@ flowchart LR
   classDef ext fill:#eeeeee,stroke:#777,color:#222
   classDef boundary fill:none,stroke:#c0392b,stroke-dasharray:6 4
 
-  subgraph compose ["docker-compose.yml — network default (images from BASE_REGISTRY, default the ECR Public mirror)"]
+  subgraph compose ["docker-compose.yml — network default (base images from BASE_REGISTRY, default the ECR Public mirror; postgres from Docker Hub)"]
     postgres[("postgres — pgvector/pgvector:pg16 — 5432 → host 5444")]:::store
     redis[("redis — redis:7-alpine — no host port")]:::store
     seed["seed — one-shot: schema, book, fixtures; queues ingestion"]:::tool
     mcpdata["mcp-data — 8081 → host 8091"]:::tool
     mcpexec["mcp-exec — 8082 → host 8092 — on default + exec_net"]:::tool
     subgraph execnet ["exec_net — internal: true"]
-      executor["executor — 9000, no host port — read_only, cap_drop ALL, tmpfs /work"]:::tool
+      executor["executor — 9000, no host port — read_only, cap_drop ALL + 6 caps for the uid drop, no-new-privileges, tmpfs /work"]:::tool
     end
     agent["agent — 8000 → host 8010"]:::agent
     worker["worker — 8090 → host 8090"]:::agent
     web["web — 3000 → host 3010 — holds the agent token server-side only; roster mounted, not baked"]:::agent
   end
-  bridge["host: bridge/claude_cli_bridge.py — 8099 — interim model door (option 3)"]:::ext
-  langsmith["LangSmith SaaS — traces, Hub, datasets, feedback, annotation queue"]:::ls
+  subgraph outside ["Outside the stack"]
+    bridge["host: bridge/claude_cli_bridge.py — 8099 — interim model door (option 3)"]:::ext
+    langsmith["LangSmith SaaS — traces, Hub, datasets, feedback, annotation queue"]:::ls
+  end
 
   seed -->|"depends_on healthy"| postgres
   seed -->|"ingest jobs"| redis
@@ -30,6 +32,8 @@ flowchart LR
   agent -->|"checkpointer, store, tables"| postgres
   worker -->|"after agent healthy"| agent
   worker -->|"queue"| redis
+  worker -->|"inbox claims, audit rows, checkpoint prune"| postgres
+  agent -->|"ingest_document job on upload"| redis
   web -->|"after agent healthy — AGENT_URL http://agent:8000"| agent
   mcpexec -->|"HTTP 9000"| executor
   agent -.->|"host.docker.internal:8099"| bridge

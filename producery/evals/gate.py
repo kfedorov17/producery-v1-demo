@@ -24,12 +24,27 @@ BASELINE = ROOT / "evals" / "baseline.json"
 GATES = ROOT / "config" / "eval_gates.yaml"
 
 
+def is_judge_key(key: str) -> bool:
+    """Return whether a score key is a judge score (`judge` from the harness, `judge_<name>` from the suite)."""
+    return key == "judge" or key.startswith("judge_")
+
+
+def p95(values: list[float]) -> float | None:
+    """Return the value at index `int(0.95 * n)` of the sorted values (the slowest row below 20 rows), or None."""
+    if not values:
+        return None
+    lat = sorted(values)
+    return lat[min(len(lat) - 1, int(0.95 * len(lat)))]
+
+
 def _row_pass(row: dict, keys: list[str] | None = None) -> bool:
-    return all(v >= 1 for k, v in row["scores"].items() if k != "judge" and (keys is None or k in keys))
+    return all(
+        v >= 1 for k, v in row["scores"].items() if not is_judge_key(k) and (keys is None or k in keys)
+    )
 
 
 def check_rates(rows: list[dict]) -> dict[str, float]:
-    """Return the pass rate per deterministic check key across the rows (the judge key is excluded).
+    """Return the pass rate per deterministic check key across the rows (judge keys are excluded).
 
     Args:
         rows: Recorded result rows, each with a `scores` mapping of check key to score.
@@ -40,7 +55,7 @@ def check_rates(rows: list[dict]) -> dict[str, float]:
     totals: dict[str, list[int]] = {}
     for r in rows:
         for k, v in r["scores"].items():
-            if k == "judge":
+            if is_judge_key(k):
                 continue
             totals.setdefault(k, []).append(1 if v >= 1 else 0)
     return {k: sum(v) / len(v) for k, v in totals.items() if v}
@@ -75,7 +90,7 @@ def decide(
         g["G2_deterministic"]["floor"]
     ):
         failures.append("G2_deterministic")
-    judged = [r["scores"]["judge"] for r in rows if "judge" in r["scores"]]
+    judged = [v for r in rows for k, v in r["scores"].items() if is_judge_key(k)]  # every judge, every key
     if judged and (
         statistics.mean(judged) < float(g["G3_judge"]["mean_floor"])
         or judged.count(0) > int(g["G3_judge"]["zero_allowed"])
@@ -98,8 +113,8 @@ def decide(
     errors = sum(len(r.get("errors") or []) for r in rows)
     if errors > int(g.get("G8_evaluator_errors", {}).get("max", 0)):
         failures.append(f"G8_evaluator_errors:{errors}")
-    lat = sorted(float(r.get("latency_s") or 0) for r in rows if r.get("latency_s"))
-    if lat and lat[min(len(lat) - 1, int(0.95 * len(lat)))] > float(g["G7_latency"]["p95_s"]):
+    p95_s = p95([float(r["latency_s"]) for r in rows if r.get("latency_s")])
+    if p95_s is not None and p95_s > float(g["G7_latency"]["p95_s"]):
         failures.append("G7_latency")
     g9 = g.get("G9_cost")
     cost = mean_cost(rows)
@@ -144,6 +159,13 @@ def main() -> int:
         data = json.loads(path.read_text(encoding="utf-8"))
         if not isinstance(data, dict) or "rows" not in data or "dataset" not in data:
             continue  # not an experiment result file (e.g. online.json)
+        if data.get("partial"):  # a `--rows` run: never a gate input, never a baseline
+            report.append(f"## {data['dataset']} — SKIPPED: partial run ({len(data['rows'])} rows, `--rows`)")
+            report.append("")
+            print(
+                f"gate: {path.name} is a partial (--rows) run and is not decided; re-run the dataset in full"
+            )
+            continue
         rows = data["rows"]
         base = (baseline.get("datasets") or {}).get(data["dataset"]) or {}
         failures = decide(rows, gates, base.get("check_rates"), base)

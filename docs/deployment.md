@@ -5,7 +5,7 @@
 The compose stack is drawn in `architecture.md` view 4 (`diagrams/view4-deployment.{mmd,svg,png}`): nine services
 on the default network, the executor alone on `exec_net`, LangSmith beside the flow. Images come from one
 Dockerfile with build targets: `agent`, `worker`, `mcp-data`, `seed` (embedding model baked in at build time, so
-no runtime download), `mcp-exec` (no embedding model), `executor` (`python:3.11-slim` plus one stdlib file), and
+no runtime download), `mcp-exec` (no embedding model), `executor` (`python:3.11-slim` plus the stdlib-only daemon `producery/executor/server.py`), and
 `web/Dockerfile` for the producer UI.
 
 Every service is disposable and horizontally scalable: no local filesystem state (the only volume is Postgres
@@ -77,7 +77,8 @@ Retention parity: `langgraph.json` expresses one `checkpointer.ttl` (30 days) fo
 per class (30/2/1 days). If per-class retention matters under Deployment, schedule the worker's `prune_checkpoints` against
 the Deployment database. The store index is the same function in both runtimes (`producery/memory/embed.py`, 384-d).
 
-Target: a self-hosted LangSmith platform on Kubernetes (documented separately). Nothing in the application
+Target: a self-hosted LangSmith platform on Kubernetes, designed in the infrastructure architecture deck that
+accompanies this repository (not part of it). Nothing in the application
 assumes compose: service discovery is URL env vars, state lives in Postgres/Redis, health endpoints exist,
 logs are JSON on stdout, images are per-service.
 

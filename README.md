@@ -23,8 +23,10 @@ operational backbone for prompts, traces, evaluations and online scoring.
 
 Prerequisites: Docker Desktop (Compose v2), Python 3.11, GNU `make`, and a LangSmith account (the free tier is
 enough). On Windows use Git Bash with `make` installed, or run the recipe lines from the `Makefile` by hand; see
-[Shell and Windows](docs/cookbook/README.md#shell-and-windows). Node 22 is needed only to develop the web UI outside
-Docker; a logged-in Claude Code CLI only for the interim model door below.
+[Shell and Windows](docs/cookbook/README.md#shell-and-windows). Node 22 with `npm --prefix web ci` and
+`npx --prefix web playwright install chromium` are needed for the web checks `python scripts/pipeline.py ci` and
+`make web-e2e` run, and to develop the web UI outside Docker; a logged-in Claude Code CLI only for the interim
+model door below.
 
 ```bash
 git clone https://github.com/kfedorov17/producery-v1-demo.git && cd producery-v1-demo
@@ -54,6 +56,14 @@ your Hub, and `prompts-check` in CI holds the code to them, so commit the change
 
 **First request:** [Run your first agent turn](docs/cookbook/first-turn.md) sends an email in through the API or
 the producer UI at `http://localhost:3010`, reads the proposal the graph pauses on, approves it and opens the trace.
+
+**Run the evals** (with the stack up and the model door reachable; see [the evals cookbook](docs/cookbook/evals.md)):
+
+```bash
+make evals                                   # the four gate datasets through LangSmith, then the gate (~20 min)
+python -m evals.evaluators.run_suite         # the 29-row suite with its three judges (~35 min)
+python -m producery.evals.gate               # the gate over every result file, including the suite
+```
 
 ## Documentation
 

@@ -47,7 +47,7 @@ python -m producery.evals.run crew_e2e --rows golden-<first 8 of the trace id>
 ```
 
 The row lands in `evals/datasets/crew_e2e.jsonl` with `source_trace_id`, `split: minted` and the default checks
-(`classification_correct`, `compliance_clean`, `schema_valid`, `outcome_equals`). Add `trajectory` or
+(`classification_correct`, `compliance_clean`, `outcome_equals`, and `schema_valid` on the send_email route). Add `trajectory` or
 `cites_approved` checks by editing the row — `crew-009` and `crew-010` are the examples to copy.
 
 The sender is scrubbed on the way in: a deterministic `client-<hash>@<same domain>` address and a fixture name,

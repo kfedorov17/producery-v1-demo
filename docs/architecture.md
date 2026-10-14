@@ -26,6 +26,8 @@ figures; **door** = the one model endpoint every call goes through; **pin** = a 
 
 ## View 1 — the system at one glance
 
+Rendered: [view1-system.png](diagrams/view1-system.png) · [view1-system.svg](diagrams/view1-system.svg)
+
 ```mermaid
 flowchart LR
   %% Legend (also in architecture.md): blue = agents and graph code, green = tool services, orange = stores,
@@ -78,15 +80,16 @@ flowchart LR
   web -->|"server-side: reads, POST /inbox, POST /threads/id/resume (by = producer)"| agent
   worker -->|"run_crew → POST /runs, polls inbox status"| agent
   worker -->|"jobs"| redis
+  agent -->|"ingest_document job on upload"| redis
   agent -->|"respond node: email as data + recalled memory"| drafter
   drafter -->|"task: one question"| analyst
   analyst -->|"cited brief ≤ 12 lines, no raw rows"| drafter
   analyst -->|"MCP tool calls"| mcpdata
   analyst -->|"MCP run_code"| mcpexec
   mcpexec -->|"POST /run on exec_net"| executor
-  agent -->|"every model call (classifier, extractor, drafter, analyst)"| door
-  mcpdata -->|"SET LOCAL ROLE producery_readonly — every book read, tools and UI alike"| tables
-  agent -->|"proposal, outbox row on approve, audit rows, documents"| tables
+  agent -->|"every model call (classifier, extractor, drafter, analyst; the judge at eval time)"| door
+  mcpdata -->|"SET LOCAL ROLE producery_readonly — every tool read of the book"| tables
+  agent -->|"proposal, outbox row on approve, audit rows, documents; UI book reads as producery_readonly"| tables
   agent -->|"checkpoint per step; memory write policies"| ckpt
   door -.->|"traced calls"| langsmith
   agent -.->|"traces: prompts, models, revision, thread"| langsmith
@@ -109,12 +112,14 @@ flowchart LR
 | memory store | Semantic, episodic and procedural memory with vector search | postgres — `AsyncPostgresStore` + `producery/memory/store.py`, index `producery/memory/embed.py` (384-d, keyless) | Namespaced by agency and thread class; explicit write policies per kind; episodic TTL 180 days |
 | app tables and book | Inbox, proposals, outbox, audit log, documents and chunks; the book as four views | postgres — `producery/store/{schema.sql,records.py}`, `fixtures/book.sql` | Idempotent writes: one proposal per thread, one outbox row per proposal, run claims; the book is reachable only through the read-only role |
 | `worker` | Releases inbox mail to the crew, ingests documents, prunes checkpoints | worker — `producery/worker/main.py` (arq over Redis) | Bounded retries (`arq.Retry` 15 s / 30 s), then a `job_dead_letter` audit row; a failed turn is recorded as failed |
-| `agent` API | `/runs`, `/threads/{id}/resume|continue|feedback`, `/ready`; the UI integration layer `/inbox`, `/proposals`, `/outbox`, `/book/{view}`, `/documents`, `/connections` | agent — `producery/server/app.py`, `ui_api.py` (FastAPI, 8000) | Bearer token on every route but the probes; the UI layer adds reads and manual intake only, nothing new in the crew |
+| `agent` API | `/runs`, `/threads/{id}/resume|continue|feedback`, `/ready`; the UI integration layer `/inbox`, `/proposals`, `/outbox`, `/book/{view}`, `/documents`, `/connections`, `/threads/{id}/audit` | agent — `producery/server/app.py`, `ui_api.py` (FastAPI, 8000) | Bearer token on every route but the probes; the UI layer adds reads and manual intake only, nothing new in the crew |
 | `web` producer UI | Today, Approve (decision cards), Thread, Clients, Documents, Connections, Settings | web — `web/` (Next.js, 3000 → host 3010) | The browser never holds the agent token: a session-gated, allowlisted `/api/ui` proxy stamps every decision with the signed-in producer; only `crew:` threads are reachable |
 | evals + gate | Datasets in the repo mirrored to LangSmith, `evaluate()` with deterministic checks first, a gate with no skip flag | host / CI — `producery/evals/*`, `evals/datasets/*.jsonl`, `config/eval_gates.yaml` | The gate proves it can fail on every run (`_gate_red_proof`) before the real suite; two judge rows only |
 | LangSmith plane | Traces stamped with agent@version, prompt commits, model tiers, build sha; Hub; experiments; feedback; annotation queue; online scoring | LangSmith — `CrewDeps.trace_metadata`, `producery/evals/online.py` | Observability sits beside the flow: nothing on the serving path depends on it |
 
 ## View 2 — one request, end to end
+
+Rendered: [view2-request.png](diagrams/view2-request.png) · [view2-request.svg](diagrams/view2-request.svg)
 
 ```mermaid
 sequenceDiagram
@@ -179,6 +184,8 @@ sequenceDiagram
 
 ## View 3 — state and memory
 
+Rendered: [view3-state-memory.png](diagrams/view3-state-memory.png) · [view3-state-memory.svg](diagrams/view3-state-memory.svg)
+
 ```mermaid
 flowchart TB
   classDef agent fill:#dbe9ff,stroke:#2f6fdb,color:#0b2a5b
@@ -187,8 +194,8 @@ flowchart TB
   classDef ext fill:#eeeeee,stroke:#777,color:#222
 
   subgraph pg ["PostgreSQL + pgvector — one database, three roles of data"]
-    ckpt[("checkpoints — AsyncPostgresSaver, one per graph step; thread id crew:| eval:| smoke:<email id>")]:::store
-    store[("memory store — AsyncPostgresStore, index on text, 384-d fastembed, namespace memory.<kind>.<agency>.<thread class>")]:::store
+    ckpt[("checkpoints — AsyncPostgresSaver, one per graph step; thread id crew:ID, eval:ID or smoke:ID")]:::store
+    store[("memory store — AsyncPostgresStore, index on text, 384-d fastembed, namespace memory.KIND.AGENCY.CLASS")]:::store
     tables[("app tables — inbox, proposals, outbox, audit_log, run_claims, ui_connections")]:::store
     docs[("documents + document_chunks — body by content hash, chunk embeddings")]:::store
     book[("book views — v_households, v_policies, v_renewals, v_appointments (producery_readonly)")]:::store
@@ -207,13 +214,14 @@ flowchart TB
     analystq["analyst via mcp-data — sql_query (views only), documents_search (chunks)"]:::tool
   end
 
-  subgraph bg ["Background — worker and sweepers"]
+  subgraph bg ["Background — worker jobs and the store sweeper"]
     ingest["ingest_document — chunk + embed, idempotent by content hash (seed, UI upload)"]:::tool
     prune["prune_checkpoints — daily: crew 30 d, eval 2 d, smoke 1 d (config/retention.yaml)"]:::tool
-    sweep["store TTL sweeper — episodic 180 d; semantic and procedural never expire"]:::tool
+    sweep["store TTL sweeper (runs in the agent process) — episodic 180 d; semantic and procedural never expire"]:::tool
   end
 
   execute -->|"outbox, proposals"| tables
+  decide -->|"proposal status + reason, audit_log"| tables
   remember -->|"facts, preferences, episodes"| store
   steps -->|"checkpoints"| ckpt
   steps -->|"proposals, audit_log"| tables
@@ -228,6 +236,8 @@ flowchart TB
 
 ## View 4 — deployment: compose today, Kubernetes / LangSmith Deployment target
 
+Rendered: [view4-deployment.png](diagrams/view4-deployment.png) · [view4-deployment.svg](diagrams/view4-deployment.svg)
+
 ```mermaid
 flowchart LR
   classDef agent fill:#dbe9ff,stroke:#2f6fdb,color:#0b2a5b
@@ -237,21 +247,23 @@ flowchart LR
   classDef ext fill:#eeeeee,stroke:#777,color:#222
   classDef boundary fill:none,stroke:#c0392b,stroke-dasharray:6 4
 
-  subgraph compose ["docker-compose.yml — network default (images from BASE_REGISTRY, default the ECR Public mirror)"]
+  subgraph compose ["docker-compose.yml — network default (base images from BASE_REGISTRY, default the ECR Public mirror; postgres from Docker Hub)"]
     postgres[("postgres — pgvector/pgvector:pg16 — 5432 → host 5444")]:::store
     redis[("redis — redis:7-alpine — no host port")]:::store
     seed["seed — one-shot: schema, book, fixtures; queues ingestion"]:::tool
     mcpdata["mcp-data — 8081 → host 8091"]:::tool
     mcpexec["mcp-exec — 8082 → host 8092 — on default + exec_net"]:::tool
     subgraph execnet ["exec_net — internal: true"]
-      executor["executor — 9000, no host port — read_only, cap_drop ALL, tmpfs /work"]:::tool
+      executor["executor — 9000, no host port — read_only, cap_drop ALL + 6 caps for the uid drop, no-new-privileges, tmpfs /work"]:::tool
     end
     agent["agent — 8000 → host 8010"]:::agent
     worker["worker — 8090 → host 8090"]:::agent
     web["web — 3000 → host 3010 — holds the agent token server-side only; roster mounted, not baked"]:::agent
   end
-  bridge["host: bridge/claude_cli_bridge.py — 8099 — interim model door (option 3)"]:::ext
-  langsmith["LangSmith SaaS — traces, Hub, datasets, feedback, annotation queue"]:::ls
+  subgraph outside ["Outside the stack"]
+    bridge["host: bridge/claude_cli_bridge.py — 8099 — interim model door (option 3)"]:::ext
+    langsmith["LangSmith SaaS — traces, Hub, datasets, feedback, annotation queue"]:::ls
+  end
 
   seed -->|"depends_on healthy"| postgres
   seed -->|"ingest jobs"| redis
@@ -261,6 +273,8 @@ flowchart LR
   agent -->|"checkpointer, store, tables"| postgres
   worker -->|"after agent healthy"| agent
   worker -->|"queue"| redis
+  worker -->|"inbox claims, audit rows, checkpoint prune"| postgres
+  agent -->|"ingest_document job on upload"| redis
   web -->|"after agent healthy — AGENT_URL http://agent:8000"| agent
   mcpexec -->|"HTTP 9000"| executor
   agent -.->|"host.docker.internal:8099"| bridge

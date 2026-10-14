@@ -12,10 +12,7 @@ import json
 from functools import lru_cache
 from typing import Any, Literal
 
-import yaml
 from pydantic import BaseModel, Field
-
-from producery.settings import get_settings
 
 ANCHORS = (
     "Levels: 0 = violation or fabrication, 1 = unusable, 2 = usable with one nameable defect, 3 = correct."
@@ -81,7 +78,7 @@ def parse_verdict(text: str) -> Verdict:
         raise ValueError(f"no JSON object in judge reply: {text[:120]!r}")
     obj = json.loads(text[start : end + 1])
     score = obj.get("score", obj.get("rating"))
-    if score not in (0, 1, 2, 3):
+    if isinstance(score, bool) or not isinstance(score, int) or score not in (0, 1, 2, 3):
         raise ValueError(f"judge score out of range: {score!r}")
     reason = next((str(obj[k]) for k in _REASON_KEYS if obj.get(k)), "")
     return Verdict(score=score, reason=reason[:400])
@@ -89,21 +86,18 @@ def parse_verdict(text: str) -> Verdict:
 
 @lru_cache(maxsize=1)
 def _judge_model() -> Any:
-    """Build the judge chat model once: the `judge` tier's model id through the configured door."""
-    from langchain_openai import ChatOpenAI
+    """Build the judge chat model once: the `judge` tier through the configured model door, with its fallbacks.
 
-    s = get_settings()
-    tiers = yaml.safe_load((s.config_dir / "models.yaml").read_text(encoding="utf-8"))["tiers"]
-    model = ChatOpenAI(
-        model=tiers["judge"]["model"],
-        base_url=s.langsmith_gateway_base_url,
-        api_key=s.langsmith_api_key,
-        temperature=0,
-        timeout=float(s.model_timeout_s),
-        max_retries=1,
-        tags=["agent:judge", "tier:judge", "suite"],
-    )
-    return model
+    The same door the agents and the harness judge use (`producery.model.door`), so `MODEL_ACCESS_MODE`,
+    the Gateway or bridge URL and the provider-key path all apply, and the tier's declared fallbacks serve
+    when the primary fails.
+    """
+    from producery.evals.context import eval_context
+
+    ctx = eval_context()
+    model = ctx.models.for_agent("judge@1", "judge")
+    fallbacks = ctx.models.fallbacks_for("judge@1", "judge")
+    return model.with_fallbacks(fallbacks) if fallbacks else model
 
 
 def _tool_outputs(out: dict[str, Any]) -> str:

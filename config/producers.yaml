@@ -1,6 +1,6 @@
 # Producer roster for the web UI (docs/design.md §14). No sign-up and no admin screen: this file IS the account list.
 # Add a producer: `cd web && npm run hash-password -- '<password>'` → paste the bcrypt hash here. Names are case-insensitive.
-# The demo account below signs in with the password documented in README.md ("Producer UI" section).
+# The demo account below signs in with the password documented in docs/cookbook/first-turn.md ("The same turn in the browser").
 producers:
   - name: sam
     display_name: Sam Rivera

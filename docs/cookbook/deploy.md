@@ -61,4 +61,4 @@ CompiledStateGraph
 ## What to read next
 
 - `../deployment.md` — the full mapping with the LangSmith docs it rests on.
-- the platform architecture document (separate) — the self-hosted LangSmith platform this deploys onto.
+- the infrastructure architecture deck delivered beside this repository (not part of it) — the self-hosted LangSmith platform this deploys onto.

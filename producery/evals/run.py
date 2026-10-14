@@ -40,6 +40,7 @@ from producery.evals.targets import TARGETS
 from producery.timeutil import utc_now_iso
 
 RESULTS_DIR = results_dir()  # EVAL_RESULTS_DIR (the gate self-test sets it) reaches it through Settings
+PARTIAL = False  # set when `--rows` filters the dataset: the result file is marked and the gate skips it
 
 
 def _record(row: dict, scores: list[dict], outputs: dict, latency: float) -> dict[str, Any]:
@@ -73,6 +74,7 @@ def _write(name: str, experiment: str, rows: list[dict], extra: dict[str, Any]) 
                 "experiment": experiment,
                 "git_sha": git_sha(),
                 "recorded_at": utc_now_iso(),
+                "partial": PARTIAL,
                 **extra,
                 "rows": rows,
             },
@@ -227,6 +229,8 @@ def main() -> int:
     a = p.parse_args()
     gates = yaml.safe_load((ROOT / "config" / "eval_gates.yaml").read_text(encoding="utf-8"))
     row_filter: set[str] | None = set(a.rows.split(",")) if a.rows else None
+    global PARTIAL
+    PARTIAL = row_filter is not None
     names = a.datasets
     if a.suite == "smoke":
         row_filter = set(gates["smoke"]["rows"])

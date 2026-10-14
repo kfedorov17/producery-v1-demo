@@ -48,3 +48,4 @@ class CrewState(TypedDict, total=False):
     artifacts: Annotated[dict[str, str], merge_dicts]  # name → artifact id
     path: Annotated[list[str], operator.add]  # trajectory: node names in execution order
     tool_calls: Annotated[list[dict[str, Any]], operator.add]  # trajectory: tool calls observed in delegates
+    memory_writes: list[dict[str, Any]]  # last value — {kind, text} per record `remember` wrote this turn

@@ -10,8 +10,8 @@ own harness (`producery/evals/`) or the suite in this folder (`evals/evaluators/
 
 | Level | Unit under test | How it is driven | Datasets |
 |---|---|---|---|
-| Node, classifier | `classify`: heuristics first, then one structured call on the `fast` tier | the stage function with the row's email | `evals/datasets/classifier.jsonl` (7 rows, seven of the eight classes, must-refuse and must-answer twins) |
-| Node, extractor | `extract_document`: one structured call on the `worker` tier over an attached document | the stage function with the row's email and document id | `evals/datasets/extractor.jsonl` (4 rows: dec page, agreement, W-9 refusal, embedded-instruction twin) |
+| Node, classifier | `classify`: heuristics first, then one structured call on the `fast` tier | the full graph over `POST /runs`, asserting only the classification (no node-level target) | `evals/datasets/classifier.jsonl` (7 rows, seven of the eight classes, must-refuse and must-answer twins) |
+| Node, extractor | `extract_document`: one structured call on the `worker` tier over an attached document | the full graph over `POST /runs` with the attachment, asserting the extracted fields (no node-level target) | `evals/datasets/extractor.jsonl` (4 rows: dec page, agreement, W-9 refusal, embedded-instruction twin) |
 | Tool | each MCP tool (`sql_query`, `documents_search`, `run_code`) with valid and invalid arguments | the tool called directly on the running MCP server | `evals/datasets/tools.jsonl` (10 rows: allowlist, write rejection, bad column, short query, timeout, egress, empty code) |
 | Graph, end to end | the whole crew: inbound email to a paused proposal, then the human decision, then execution and memory | `POST /runs` on the live agent, resume with the row's decision (`producery.evals.targets.crew_target`) | `evals/datasets/crew_e2e.jsonl` (14 rows) and `evals/data/suite.jsonl` (29 rows, this package) |
 | Production, online | sampled real traces of `crew:` threads | `producery.evals.online` over recent root runs | no dataset; thresholds in `config/langsmith/online_evals.yaml` |

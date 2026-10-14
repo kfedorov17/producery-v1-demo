@@ -39,7 +39,7 @@ lock:             ## regenerate requirements.lock from pyproject on the image's 
 prompts-push:     ## push ANCHOR prompts to the Hub and pin commits
 	$(PY) scripts/prompts_push.py
 
-langsmith-setup:  ## annotation queue + online-eval config echo (idempotent)
+langsmith-setup:  ## tracing project, annotation queue, the four datasets, online-eval config echo (idempotent)
 	$(PY) scripts/langsmith_setup.py
 
 lint:

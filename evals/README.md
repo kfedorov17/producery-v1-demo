@@ -8,11 +8,11 @@ results in the shape the repository's gate reads.
 | Path | What it is |
 |---|---|
 | [`plan.md`](plan.md) | the evaluation plan: levels, quality dimensions, thresholds, how the gate fits the release flow |
-| [`data/suite.jsonl`](data/suite.jsonl), [`data/README.md`](data/README.md) | the 29-row suite (happy, edge, failure, red-team with `injection: 1`) and its schema and coverage |
+| [`data/suite.jsonl`](data/suite.jsonl), [`data/README.md`](data/README.md) | the 29-row suite (happy, edge, failure, red-team; six red-team rows are injection rows with `injection: 1`) and its schema and coverage |
 | [`evaluators/deterministic.py`](evaluators/deterministic.py) | 14 deterministic checks selected by a row's expected properties |
 | [`evaluators/judges.py`](evaluators/judges.py) | three LLM judges (faithfulness, tone, completeness), anchored 0 to 3, rubric in the prompt |
 | [`evaluators/run_suite.py`](evaluators/run_suite.py) | loads the suite into LangSmith, runs `langsmith.evaluate()`, writes `.eval-results/suite.json` and `suite-summary.md` |
-| [`results-summary.md`](results-summary.md) | the results table template (metric, target, actual, pass) per category, with the recorded runs |
+| [`results-summary.md`](results-summary.md) | the results tables (metric, target, actual, pass) per category, filled from the recorded run; the raw files are under [`results/`](results/) |
 | [`datasets/`](datasets/), [`baseline.json`](baseline.json) | the repository's four datasets and the gate's baseline (unchanged by this package) |
 
 ## Run it
@@ -27,9 +27,18 @@ python -m evals.evaluators.run_suite             # all 29 rows, judges on, exper
 python -m producery.evals.gate                   # the gate now includes .eval-results/suite.json
 ```
 
-Options: `--rows a,b` (a subset), `--no-judges` (deterministic checks only, about a third of the model calls),
-`--local` (no LangSmith experiment, results to the file only), `--prefix name`. A full run with judges takes
-about 35 minutes on the interim door and spends about 120 traces.
+Options: `--rows a,b` (a subset; the result file is marked partial and the gate skips it), `--no-judges`
+(deterministic checks only, about a third of the model calls), `--local` (no LangSmith experiment, results to the
+file only), `--prefix name`. A full run with judges takes about 35 minutes on the interim door and spends about
+120 traces. The exit code is 0 only when every deterministic check passes on every row and every judge key has a
+mean of at least 2.6 with no row at 0.
+
+Model door for a reviewer: with only a LangSmith key you can run the `tools` dataset, `make prove-gate` and the
+unit tests. The model-dependent datasets need one of: the LLM Gateway enabled on your organisation
+(`MODEL_ACCESS_MODE=gateway`), a logged-in Claude Code CLI on the host (`make bridge`, the interim door the
+recorded runs used), or `MODEL_ACCESS_MODE=langchain` with `LANGSMITH_GATEWAY_BASE_URL` empty and the provider
+keys from `.env.example` set, in which case the tiers in `config/models.yaml` are called directly with their
+declared fallbacks. The suite's judges go through the same door as the agents.
 
 With the interim door on a host where `host.docker.internal` resolves to a VPN interface, run the host side with
 `LANGSMITH_GATEWAY_BASE_URL=http://127.0.0.1:8099/v1` (the containers keep the `.env` value). On a Windows

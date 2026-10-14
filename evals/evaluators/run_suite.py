@@ -28,6 +28,7 @@ from langsmith.utils import LangSmithNotFoundError
 from evals.evaluators import deterministic as det
 from evals.evaluators.judges import JUDGES
 from producery.evals.datasets import git_sha, results_dir
+from producery.evals.gate import is_judge_key, p95
 from producery.timeutil import utc_now_iso
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -147,10 +148,9 @@ def suite_evaluator(judges: bool) -> Any:
                 if verdict is not None:  # a judge with nothing to judge records nothing
                     results.append(verdict)
             except Exception as e:  # one failing check must not erase the row's other verdicts
-                key = getattr(fn, "__name__", "check").removeprefix("judge_")
                 results.append(
                     {
-                        "key": key if not fn.__name__.startswith("judge_") else fn.__name__,
+                        "key": det.KEY_OF.get(fn, getattr(fn, "__name__", "check")),
                         "score": None,
                         "comment": f"evaluator_error: {type(e).__name__}: {str(e)[:200]}",
                     }
@@ -182,6 +182,25 @@ def record(
     }
 
 
+def clean_rows(rows: list[dict[str, Any]]) -> int:
+    """Count the rows with no evaluator error and every deterministic check at 1 (judge keys are not checks)."""
+    return sum(
+        1
+        for r in rows
+        if not r["errors"] and all(v >= 1 for k, v in r["scores"].items() if not is_judge_key(k))
+    )
+
+
+def judges_pass(rows: list[dict[str, Any]]) -> bool:
+    """Apply the judge rule per judge key: mean at least `JUDGE_TARGET[1]` and no row at 0; True when unjudged."""
+    by_key: dict[str, list[int]] = defaultdict(list)
+    for r in rows:
+        for k, v in r["scores"].items():
+            if is_judge_key(k):
+                by_key[k].append(v)
+    return all(statistics.mean(vals) >= JUDGE_TARGET[1] and 0 not in vals for vals in by_key.values())
+
+
 def summarise(rows: list[dict[str, Any]], experiment: str, urls: dict[str, str]) -> str:
     """Render the results table: metric, target, actual, pass/fail, per category and overall.
 
@@ -193,7 +212,7 @@ def summarise(rows: list[dict[str, Any]], experiment: str, urls: dict[str, str])
     lines = [f"# Suite results: {experiment}", ""]
     for k, v in urls.items():
         lines.append(f"- {k}: {v}")
-    clean = sum(1 for r in rows if not r["errors"] and all(v >= 1 for k, v in r["scores"].items()))
+    clean = clean_rows(rows)
     errors = sum(len(r["errors"]) for r in rows)
     lines += ["", f"Rows: {len(rows)}; clean: {clean}; evaluator errors: {errors}.", ""]
     by_cat: dict[str, list[dict[str, Any]]] = defaultdict(list)
@@ -224,14 +243,17 @@ def summarise(rows: list[dict[str, Any]], experiment: str, urls: dict[str, str])
                 lines.append(
                     f"| `{key}` | {target} | {rate:.0%} ({sum(1 for v in vals if v >= 1)}/{len(vals)}) | {'pass' if rate >= floor else 'FAIL'} |"
                 )
-        lat = sorted(r["latency_s"] for r in group)
-        p95 = lat[max(0, int(0.95 * len(lat)) - 1)]
-        lines.append(f"| p95 latency | <= 180 s | {p95:.0f} s | {'pass' if p95 <= 180 else 'FAIL'} |")
-        bad = [r for r in group if r["errors"] or any(v < 1 for k, v in r["scores"].items())]
+        p95_s = p95([r["latency_s"] for r in group]) or 0.0
+        lines.append(f"| p95 latency | <= 180 s | {p95_s:.0f} s | {'pass' if p95_s <= 180 else 'FAIL'} |")
+        bad = [
+            r
+            for r in group
+            if r["errors"] or any(v < 1 for k, v in r["scores"].items() if not is_judge_key(k))
+        ]
         if bad:
             lines.append("")
             for r in bad:
-                failed = {k: v for k, v in r["scores"].items() if v < 1}
+                failed = {k: v for k, v in r["scores"].items() if v < 1 and not is_judge_key(k)}
                 lines.append(
                     f"- `{r['row_id']}`: {failed} {json.dumps(r['comments'])[:240]}"
                     + (f" errors={r['errors']}" if r["errors"] else "")
@@ -340,6 +362,7 @@ def main() -> int:
                 "experiment": experiment,
                 "git_sha": git_sha(),
                 "recorded_at": utc_now_iso(),
+                "partial": bool(a.rows),
                 "rows": recorded,
             },
             indent=1,
@@ -350,8 +373,7 @@ def main() -> int:
     summary = summarise(recorded, experiment, urls)
     (RESULTS_DIR / "suite-summary.md").write_text(summary, encoding="utf-8")
     print(summary)
-    clean = sum(1 for r in recorded if not r["errors"] and all(v >= 1 for v in r["scores"].values()))
-    return 0 if clean == len(recorded) else 1
+    return 0 if clean_rows(recorded) == len(recorded) and judges_pass(recorded) else 1
 
 
 if __name__ == "__main__":

@@ -55,13 +55,22 @@ def load_rows(name: str) -> list[dict[str, Any]]:
     Returns:
         The non-blank rows in file order; a missing row_id becomes `{name}-{index:03d}`, a missing split
         `base`.
+
+    Raises:
+        ValueError: If a row names a check that `producery.evals.evaluators.CHECKS` does not define, so a typo
+            fails here and not as an evaluator error after the model calls were paid.
     """
+    from producery.evals.evaluators import CHECKS
+
     rows = []
     for i, line in enumerate((DATASETS_DIR / f"{name}.jsonl").read_text(encoding="utf-8").splitlines()):
         if line.strip():
             row = json.loads(line)
             row.setdefault("metadata", {}).setdefault("row_id", f"{name}-{i:03d}")
             row["metadata"].setdefault("split", "base")
+            unknown = [c["name"] for c in row["metadata"].get("checks", []) if c.get("name") not in CHECKS]
+            if unknown:
+                raise ValueError(f"{name}.jsonl row {row['metadata']['row_id']}: unknown checks {unknown}")
             rows.append(row)
     return rows
 

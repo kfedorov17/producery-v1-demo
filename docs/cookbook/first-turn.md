@@ -34,6 +34,7 @@ Every thread is `crew:<email id>`; pick an id you have not used (an executed thr
 `proposal_already_executed` on a re-run — that is correct, not a bug).
 
 ```bash
+TOK=$(grep -E '^AGENT_API_TOKEN=' .env | cut -d= -f2-)      # the bearer token every agent route needs
 curl -s -X POST localhost:8010/runs -H "authorization: Bearer $TOK" -H 'content-type: application/json' \
   -d '{"wait":false,"email":{"id":"cb-first-1","from_email":"sam@example.net","from_name":"Sam Patel","subject":"renewal","body":"What changed on my homeowners renewal this year?"}}'
 ```
@@ -57,10 +58,11 @@ until curl -s localhost:8010/threads/crew:cb-first-1 -H "authorization: Bearer $
 python scripts/approve.py show crew:cb-first-1
 ```
 
-A drafting turn takes one to three minutes on the interim door. `done`
-without a pause means a deterministic route (a known carrier or network domain, a rule in `config/heuristics.yaml`)
-staged nothing to decide; `failed` means every model call failed, and the thread's `error` and
-[Operate it](operate.md) say why.
+A drafting turn takes one to three minutes on the interim door. Every route that stages a proposal pauses,
+including the deterministic ones (a known carrier domain or a rule in `config/heuristics.yaml` stages a review
+task). `done` without a pause happens in two cases only: personal mail, which is archived with nothing to decide,
+and a re-run of a thread whose proposal was already decided (`proposal_already_<status>`). `failed` means every
+model call failed, and the thread's `error` and [Operate it](operate.md) say why.
 
 In the output, `interrupt` is the proposal: `kind` (`send_email`, `create_task` or `update_record`), the `payload`
 (for a reply: `to`, `subject`, `body`), the `owner_brief` with its citations (`v_renewals.premium`,

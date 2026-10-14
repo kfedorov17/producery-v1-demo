@@ -33,7 +33,7 @@ What each page covers and who it is for. Read `architecture.md` first; the rest 
 | `config/`, `prompts/` | every setting that is not an environment variable; the ANCHOR prompt sources |
 | `evals/datasets`, `fixtures/` | eval rows (JSONL) and the seed data (book, documents, emails) |
 | `tests/` | the unit suite (graph nodes and routing, guards, tools, evals, repo contract) |
-| `scripts/` | host tools: demo, approve, prompts push, mint golden rows, seed, MCP smoke, the pipeline runner |
+| `scripts/` | host tools: demo, approve, prompts push, LangSmith workspace setup, mint golden rows, seed, MCP smoke, the pipeline runner |
 | `pipeline/`, `.github/workflows` | the one pipeline definition and the workflow that calls its stages |
 | `bridge/` | the interim model door (option 3), host-side |
 | `docs/` | this documentation |
