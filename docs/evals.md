@@ -90,12 +90,12 @@ The four datasets through the interim Claude CLI bridge on the compose stack bui
 `judge_draft:08ec7154`); experiments in LangSmith project `producery`, gate report in
 `evals/results/gate_report-2026-10-13.md`.
 
-| Dataset | Experiment | Rows clean | p95 latency | Mean cost per row | Gate |
+| Dataset | Experiment | Rows clean | p95 latency (as gate G7 computes it; on these row counts the slowest row) | Mean cost per row | Gate |
 |---|---|---|---|---|---|
-| classifier | `run-a0ed473-classifier-1f643274` | 7/7 | 49 s | 0.10 USD | GREEN |
-| crew_e2e | `run-a0ed473-crew_e2e-2e6aa9ad` | 14/14 | 118 s | 0.30 USD | GREEN |
-| extractor | `run-a0ed473-extractor-7d830411` | 4/4 | 13 s | 0.08 USD | GREEN |
-| tools | `run-a0ed473-tools-ae22e251` | 10/10 | 1.6 s | none (no model call) | GREEN |
+| classifier | `run-a0ed473-classifier-1f643274` | 7/7 | 61 s | 0.10 USD | GREEN |
+| crew_e2e | `run-a0ed473-crew_e2e-2e6aa9ad` | 14/14 | 146 s | 0.30 USD | GREEN |
+| extractor | `run-a0ed473-extractor-7d830411` | 4/4 | 17 s | 0.08 USD | GREEN |
+| tools | `run-a0ed473-tools-ae22e251` | 10/10 | 2.8 s | none (no model call) | GREEN |
 
 Gate verdict `GREEN` on G1 to G9, zero evaluator errors; the judge scored 3 of 3 on both judged rows
 (`crew-001`, `crew-008`). Representative traces: `crew-001` (a drafting turn with `task` → `sql_query`, 118 s,
