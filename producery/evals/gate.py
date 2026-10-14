@@ -154,7 +154,7 @@ def main() -> int:
         return 1
     report = ["# Eval gate report", ""]
     all_failures: list[str] = []
-    new_baseline: dict[str, Any] = {"datasets": {}}
+    decided: dict[str, Any] = {}  # the datasets this run decided; the baseline keeps the others as they were
     for path in files:
         data = json.loads(path.read_text(encoding="utf-8"))
         if not isinstance(data, dict) or "rows" not in data or "dataset" not in data:
@@ -199,7 +199,7 @@ def main() -> int:
             report.append(f"- {rid}: {scores} {json.dumps(comments)[:300]}")
         report.append("")
         all_failures += [f"{data['dataset']}:{f}" for f in failures]
-        new_baseline["datasets"][data["dataset"]] = {
+        decided[data["dataset"]] = {
             "experiment": data.get("experiment"),
             "git_sha": data.get("git_sha"),
             "check_rates": check_rates(rows),
@@ -215,8 +215,12 @@ def main() -> int:
         if all_failures:
             print("refusing to write a RED baseline")
             return 1
+        if not decided:
+            print("refusing to write a baseline: no full dataset was decided (partial runs are skipped)")
+            return 1
+        new_baseline = {"datasets": {**(baseline.get("datasets") or {}), **decided}}
         BASELINE.write_text(json.dumps(new_baseline, indent=2) + "\n", encoding="utf-8")
-        print(f"baseline written: {BASELINE}")
+        print(f"baseline written: {BASELINE} ({', '.join(decided)} refreshed)")
     return 1 if all_failures else 0
 
 

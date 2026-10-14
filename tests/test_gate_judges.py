@@ -65,3 +65,34 @@ def test_suite_exit_rule_counts_judges_separately():
     assert clean_rows(rows) == 2  # deterministic checks clean
     assert not judges_pass(rows)  # mean 2.0 below 2.6
     assert judges_pass([_row("c", {"outcome": 1, "judge_tone": 3})])
+
+
+def test_baseline_keeps_datasets_a_partial_run_did_not_decide(tmp_path, monkeypatch):
+    baseline = tmp_path / "baseline.json"
+    baseline.write_text(
+        json.dumps({"datasets": {"tools": {"rows": 10, "check_rates": {"tool_result": 1.0}}}})
+    )
+    (tmp_path / "crew_e2e.json").write_text(
+        json.dumps({"dataset": "crew_e2e", "rows": [_row("x", {"outcome": 1})]}), encoding="utf-8"
+    )
+    (tmp_path / "tools.json").write_text(
+        json.dumps({"dataset": "tools", "partial": True, "rows": [_row("t", {"tool_result": 1})]}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("sys.argv", ["gate", "--results", str(tmp_path), "--write-baseline"])
+    monkeypatch.setattr(gate, "BASELINE", baseline)
+    assert gate.main() == 0
+    written = json.loads(baseline.read_text(encoding="utf-8"))["datasets"]
+    assert written["tools"]["rows"] == 10  # untouched by the partial smoke run
+    assert written["crew_e2e"]["rows"] == 1
+
+
+def test_baseline_is_refused_when_nothing_was_decided(tmp_path, monkeypatch):
+    (tmp_path / "tools.json").write_text(
+        json.dumps({"dataset": "tools", "partial": True, "rows": [_row("t", {"tool_result": 1})]}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("sys.argv", ["gate", "--results", str(tmp_path), "--write-baseline"])
+    monkeypatch.setattr(gate, "BASELINE", tmp_path / "baseline.json")
+    assert gate.main() == 1
+    assert not (tmp_path / "baseline.json").exists()
